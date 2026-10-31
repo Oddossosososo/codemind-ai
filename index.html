@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#090b12">
+  <meta name="description" content="CodeMind AI — a focused AI workspace for thinking, building, and debugging.">
+  <title>CodeMind AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="/" aria-label="CodeMind home">
+        <span class="brand-mark"><span></span><span></span><span></span></span>
+        <span>CodeMind<span class="brand-ai">.AI</span></span>
+      </a>
+      <button class="new-chat" id="newChat"><span>＋</span> New chat <kbd>⌘ K</kbd></button>
+      <div class="side-label">WORKSPACE</div>
+      <button class="side-link active"><span class="side-icon">◈</span> Chat</button>
+      <button class="side-link" id="projectsButton"><span class="side-icon">▦</span> Projects <span class="soon">SOON</span></button>
+      <button class="side-link" id="memoryButton"><span class="side-icon">⌁</span> Memory <span class="soon">LOCAL</span></button>
+      <div class="side-bottom">
+        <div class="model-card">
+          <div class="status-line"><span class="status-dot"></span> MODEL CONNECTION</div>
+          <strong>GPT-OSS 120B</strong>
+          <span class="muted">Powered by Groq · server-side</span>
+        </div>
+        <div class="profile">
+          <div class="avatar">C</div>
+          <div><strong>CodeMind</strong><span>Personal workspace</span></div>
+          <span class="profile-menu">···</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobileMenu" aria-label="Open menu">☰</button>
+        <div class="breadcrumb">Workspace <span>/</span> <strong>New conversation</strong></div>
+        <div class="top-actions"><span class="private-pill"><i></i> LOCAL HISTORY</span><button class="icon-button" id="clearChat" title="Clear conversation">↺</button></div>
+      </header>
+
+      <section class="chat-area" id="chatArea">
+        <div class="welcome" id="welcome">
+          <div class="eyebrow"><span></span> YOUR CODING PARTNER</div>
+          <h1>Think it.<br><em>Build it.</em></h1>
+          <p class="welcome-copy">A focused space to explore ideas, solve bugs, and turn<br class="desktop-only"> complicated problems into working code.</p>
+          <div class="suggestions">
+            <button class="suggestion" data-prompt="Help me plan a clean JavaScript project structure."><span>⌘</span><b>Plan a project</b><small>Structure an idea from scratch</small><i>↗</i></button>
+            <button class="suggestion" data-prompt="Explain how JavaScript async and await work, with a simple example."><span>⌁</span><b>Learn a concept</b><small>Understand code step by step</small><i>↗</i></button>
+            <button class="suggestion" data-prompt="Help me debug this code. I'll paste it next."><span>⌕</span><b>Debug code</b><small>Find and fix tricky errors</small><i>↗</i></button>
+            <button class="suggestion" data-prompt="Give me three useful features to add to my coding project."><span>✳</span><b>Explore an idea</b><small>Turn a thought into a feature</small><i>↗</i></button>
+          </div>
+        </div>
+        <div class="messages" id="messages" aria-live="polite"></div>
+      </section>
+
+      <section class="composer-wrap">
+        <form class="composer" id="chatForm">
+          <textarea id="messageInput" rows="1" placeholder="Ask CodeMind anything about code..." aria-label="Message CodeMind"></textarea>
+          <div class="composer-footer">
+            <div class="composer-hint"><span>↵</span> to send <span class="hint-divider">·</span> <kbd>Shift + ↵</kbd> for new line</div>
+            <button class="send-button" id="sendButton" type="submit" aria-label="Send message"><span>↑</span></button>
+          </div>
+        </form>
+        <p class="disclaimer">CodeMind can make mistakes. Review important code before using it.</p>
+      </section>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="/app.js" defer></script>
+</body>
+</html>
