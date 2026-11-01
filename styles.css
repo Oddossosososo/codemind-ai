@@ -21,3 +21,6 @@
 .file-viewer pre{margin:0;padding:16px;overflow:auto;max-height:55vh;color:#d6def0;font:11px/1.7 var(--mono);white-space:pre}
 .github-note{font-size:10px;color:#687287;margin-top:12px}
 @media(max-width:600px){.github-panel{width:calc(100% - 32px);padding-top:30px}.github-heading{align-items:flex-start;flex-direction:column}.github-controls{align-items:stretch;flex-direction:column}.file-input-row{flex-direction:column}.connect-github{width:100%}}
+
+.attach-file-button{display:block;margin:14px;padding:10px 13px;border:1px solid #514477;border-radius:8px;background:#211c35;color:#eee9ff;font:600 11px var(--sans);cursor:pointer}
+.attach-file-button:hover{background:#30264b}
