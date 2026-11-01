@@ -5,6 +5,7 @@ const welcome = document.querySelector("#welcome");
 const sendButton = document.querySelector("#sendButton");
 const toast = document.querySelector("#toast");
 const STORAGE_KEY = "codemind-chat-v1";
+const API_BASE_URL = "https://codemind-ai-l8ix.onrender.com";
 let messages = loadMessages();
 let busy = false;
 
@@ -66,7 +67,7 @@ async function sendMessage(text) {
   pending.innerHTML = '<div class="message-avatar">C</div><div class="message-content"><div class="message-role">CODEMIND</div><div class="message-text typing">Thinking···</div></div>';
   messagesEl.appendChild(pending);
   try {
-    const response = await fetch("/api/chat", {
+    const response = await fetch(`${API_BASE_URL}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messages: messages.slice(-20) })
@@ -77,7 +78,7 @@ async function sendMessage(text) {
     messages.push({ role: "assistant", content: data.reply.trim() });
     saveMessages();
   } catch (error) {
-    messages.push({ role: "assistant", content: "I couldn't connect: " + error.message + "\n\nCheck that the CodeMind server is running and GROQ_API_KEY is configured." });
+    messages.push({ role: "assistant", content: "I couldn't connect: " + error.message + "\n\nCheck that the CodeMind backend is deployed and GROQ_API_KEY is configured." });
     saveMessages();
   } finally {
     setBusy(false);
