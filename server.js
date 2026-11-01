@@ -1012,21 +1012,21 @@ app.post("/api/chat", async (req, res) => {
           return res.json({
             reply: "Verified level: **" + level.name + "** by **" + level.author +
               "**. Level ID: **" + level.id + "**\n\n" + level.url +
-              "\n\nGDBrowser search: " + searchUrl
+              "\n\n[GDBrowser search](" + searchUrl + ")"
           });
         }
         if (creatorMatches.length > 1) {
           return res.json({
             reply: "I verified multiple exact matches for **" + levelName + "** by **" + requestedCreator +
               "** using the official Geometry Dash servers:\n" + creatorMatches.map(formatLevel).join("\n") +
-              "\n\nGDBrowser search: " + searchUrl
+              "\n\n[GDBrowser search](" + searchUrl + ")"
           });
         }
         if (requestedCreator && nameMatches.length) {
           return res.json({
             reply: "I verified level(s) named **" + levelName + "**, but none were created by **" +
               requestedCreator + "**. I won't substitute another creator.\n\nVerified results:\n" +
-              nameMatches.map(formatLevel).join("\n") + "\n\nGDBrowser search: " + searchUrl
+              nameMatches.map(formatLevel).join("\n") + "\n\n[GDBrowser search](" + searchUrl + ")"
           });
         }
         if (!requestedCreator && nameMatches.length === 1) {
@@ -1034,13 +1034,13 @@ app.post("/api/chat", async (req, res) => {
           return res.json({
             reply: "Verified level: **" + level.name + "** by **" + level.author +
               "** has ID **" + level.id + "**.\n\n" + level.url +
-              "\n\nGDBrowser search: " + searchUrl
+              "\n\n[GDBrowser search](" + searchUrl + ")"
           });
         }
         if (nameMatches.length > 1) {
           return res.json({
             reply: "I verified multiple exact matches for **" + levelName + "**:\n" +
-              nameMatches.map(formatLevel).join("\n") + "\n\nGDBrowser search: " + searchUrl
+              nameMatches.map(formatLevel).join("\n") + "\n\n[GDBrowser search](" + searchUrl + ")"
           });
         }
         const possibleMatches = verifiedMatches.filter(item =>
@@ -1052,7 +1052,7 @@ app.post("/api/chat", async (req, res) => {
             reply: "I couldn't verify an exact name match for **" + levelName +
               "**. These are independently verified possible matches, not confirmed answers:\n" +
               possibleMatches.slice(0, 5).map(formatLevel).join("\n") +
-              "\n\nGDBrowser search: " + searchUrl
+              "\n\n[GDBrowser search](" + searchUrl + ")"
           });
         }
         return res.json({
