@@ -54,6 +54,12 @@
           <label for="prefLength">Response length</label><select id="prefLength"><option value="concise">Concise</option><option value="balanced">Balanced</option><option value="detailed">Detailed</option></select>
           <label for="prefStyle">Coding style</label><select id="prefStyle"><option value="explain">Explain code step by step</option><option value="code-first">Code first, short explanation</option><option value="debug">Diagnose first, then fix</option></select>
           <div class="preferences-toggle"><div><strong>Game modding & security learning</strong><p>Support authorised game mods, browser-console experiments, CTFs and security testing.</p></div><input id="prefHacks" type="checkbox" checked></div>
+          <div class="custom-preferences">
+            <div class="custom-preferences-heading"><strong>Your custom preferences</strong><span>CREATE YOUR OWN RULES</span></div>
+            <p>Add instructions you want CodeMind AI to follow, then switch each one on or off.</p>
+            <div class="custom-preference-add"><input id="customPreferenceInput" maxlength="180" placeholder="e.g. Always give JavaScript examples" aria-label="New custom preference"><button id="addCustomPreference" type="button">＋ Add</button></div>
+            <div id="customPreferencesList" class="custom-preferences-list"><div class="custom-preferences-empty">No custom preferences yet.</div></div>
+          </div>
           <p class="preferences-note">These preferences guide answers; they don't grant access to accounts or systems. Only test systems you own or have permission to assess.</p>
           <button class="preferences-save" id="savePreferences" type="button">Save preferences</button>
         </div>
