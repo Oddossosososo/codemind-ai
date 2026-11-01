@@ -782,78 +782,67 @@ async function fetchGDBrowserLevel(levelId) {
 async function fetchGDBrowserLevelSearch(query) {
   const cleanQuery = String(query || "").trim().slice(0, 100);
   if (!cleanQuery) return [];
-
-  // Try the official Geometry Dash server first.
-  let boomlingsError;
+  let boomlingsError = new Error("Boomlings returned no results.");
   try {
-    const body = new URLSearchParams({
-      str: cleanQuery,
-      type: "0",
-      secret: "Wmfd2893gb7",
-      gameVersion: "22",
-      binaryVersion: "51",
-      page: "0"
-    });
+    const body = new URLSearchParams({ str: cleanQuery, type: "0", secret: "Wmfd2893gb7", gameVersion: "22", binaryVersion: "51", page: "0" });
     const response = await fetch("https://www.boomlings.com/database/getGJLevels21.php", {
       method: "POST",
-      headers: {
-        "User-Agent": "",
-        "Content-Type": "application/x-www-form-urlencoded"
-      },
+      headers: { "User-Agent": "", "Content-Type": "application/x-www-form-urlencoded" },
       body: body.toString(),
       signal: AbortSignal.timeout(15000)
     });
-    if (!response.ok) throw new Error("Boomlings API returned HTTP " + response.status);
-
+    if (!response.ok) throw new Error("HTTP " + response.status);
     const raw = (await response.text()).trim();
-    if (!raw || raw === "-1") throw new Error("Boomlings returned no usable search response.");
+    if (!raw || raw === "-1") throw new Error("No usable response");
     const sections = raw.split("#");
-    if (sections.length < 2) throw new Error("Boomlings API returned an invalid level-search response.");
-
+    if (sections.length < 2) throw new Error("Invalid response format");
     const creators = new Map();
     for (const creator of (sections[1] || "").split("|")) {
       const parts = creator.split(":");
       if (parts.length >= 2) creators.set(String(parts[0]), parts[1]);
     }
-
-    return (sections[0] || "").split("|").filter(Boolean).map(levelRaw => {
+    const results = (sections[0] || "").split("|").filter(Boolean).map(levelRaw => {
       const fields = levelRaw.split(":");
       const data = {};
       for (let i = 0; i + 1 < fields.length; i += 2) data[fields[i]] = fields[i + 1];
       const id = String(data["1"] || "");
       if (!/^\d{1,12}$/.test(id)) return null;
-      return {
-        name: String(data["2"] || "Unknown"),
-        id,
-        author: creators.get(String(data["6"] || "")) || "Unknown",
-        searchSource: "Boomlings"
-      };
+      return { name: String(data["2"] || "Unknown"), id, author: creators.get(String(data["6"] || "")) || "Unknown", searchSource: "Boomlings" };
     }).filter(Boolean);
+    if (results.length) return results;
+    boomlingsError = new Error("Boomlings returned no matching levels.");
   } catch (error) {
     boomlingsError = error;
-    console.warn("Boomlings search unavailable; trying GDBrowser search fallback:", error.message);
+    console.warn("Boomlings search unavailable:", error.message);
   }
-
-  // GDBrowser exposes a JSON search endpoint; use it only as a fallback.
+  try {
+    const params = new URLSearchParams({ query: cleanQuery, startPage: "0", pages: "3" });
+    const response = await fetch("https://gdrateplus.com/api/search/levels?" + params.toString(), {
+      headers: { "Accept": "application/json", "User-Agent": "GyattGPT-AI/1.0" },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const payload = await response.json();
+    const results = (Array.isArray(payload?.results) ? payload.results : []).map(item => {
+      const id = String(item?.id || "");
+      if (!/^\d{1,12}$/.test(id)) return null;
+      return { name: String(item.name || "Unknown"), id, author: String(item.creator || item.author || "Unknown"), searchSource: "GDRate+" };
+    }).filter(Boolean);
+    if (results.length) return results;
+  } catch (error) {
+    console.warn("GDRate+ search unavailable:", error.message);
+  }
   const fallbackResponse = await fetch("https://gdbrowser.com/api/search/" + encodeURIComponent(cleanQuery), {
-    headers: { "User-Agent": "GyattGPT-AI/1.0 (Geometry Dash level lookup)", "Accept": "application/json" },
+    headers: { "User-Agent": "GyattGPT-AI/1.0", "Accept": "application/json" },
     signal: AbortSignal.timeout(15000)
   });
-  if (!fallbackResponse.ok) {
-    throw new Error("Boomlings failed (" + boomlingsError.message + ") and GDBrowser fallback returned HTTP " + fallbackResponse.status);
-  }
+  if (!fallbackResponse.ok) throw new Error("Boomlings: " + boomlingsError.message + "; GDRate+ and GDBrowser fallbacks unavailable.");
   const fallbackData = await fallbackResponse.json();
-  const fallbackLevels = Array.isArray(fallbackData) ? fallbackData :
-    (Array.isArray(fallbackData?.levels) ? fallbackData.levels : []);
+  const fallbackLevels = Array.isArray(fallbackData) ? fallbackData : (Array.isArray(fallbackData?.levels) ? fallbackData.levels : (Array.isArray(fallbackData?.results) ? fallbackData.results : []));
   return fallbackLevels.map(item => {
     const id = String(item?.id || "");
     if (!/^\d{1,12}$/.test(id)) return null;
-    return {
-      name: String(item.name || "Unknown"),
-      id,
-      author: String(item.author || "Unknown"),
-      searchSource: "GDBrowser fallback"
-    };
+    return { name: String(item.name || "Unknown"), id, author: String(item.author || item.creator || "Unknown"), searchSource: "GDBrowser fallback" };
   }).filter(Boolean);
 }
 app.post("/api/search", async (req, res) => {
