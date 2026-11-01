@@ -447,8 +447,14 @@ app.post("/api/github/commit-file", requireOwner, async (req, res) => {
     });
   } catch (error) {
     const status = error.status === 409 || error.status === 422 ? 409 : (error.status || 502);
+    const integrationPermissionError = status === 403 &&
+      /resource not accessible by integration|not permitted to .*contents|write access/i.test(error.message);
     res.status(status).json({
-      error: status === 409 ? "This file changed on GitHub since the proposal was made. Reload it before committing." : error.message
+      error: status === 409
+        ? "This file changed on GitHub since the proposal was made. Reload it before committing."
+        : integrationPermissionError
+          ? "GitHub denied the commit because the CodeMind GitHub App needs Repository permissions → Contents: Read and write. Update the App permissions, accept the installation permission update, then retry."
+          : error.message
     });
   }
 });
