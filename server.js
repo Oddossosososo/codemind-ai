@@ -1060,8 +1060,13 @@ app.post("/api/chat", async (req, res) => {
     /^(?:send (?:me )?(?:the )?(?:level )?id|what(?:'s| is) (?:the )?id|give me (?:the )?id|do it|do it on your own|try again|check again|verify it|search again|find it|look it up|what is the level)\b/i.test(latestUserMessage.trim());
   const gdFollowupPlayer = recentGDContext &&
     /^who is [A-Za-z0-9_-]{2,32}\??$/i.test(latestUserMessage.trim());
+  const gdDailyFollowup = recentGDContext &&
+    /^(?:what(?:'s| is) (?:the )?(?:current )?(?:daily|weekly)(?: level)?|(?:daily|weekly)(?: level)?)\??$/i.test(latestUserMessage.trim());
+  const gdMostLikedFollowup = recentGDContext &&
+    /\b(?:his|her|their|hi)\s+(?:most[- ]liked|highest[- ]liked)\s+level\b/i.test(latestUserMessage);
+  const standaloneGDLookup = /\b(?:what(?:'s| is) )?(?:the )?(?:current )?(?:daily|weekly)(?: level| demon)?\b|\b(?:most[- ]liked|highest[- ]liked)\s+(?:level\s+)?(?:by|for|of)\s+[A-Za-z0-9_-]{2,32}\b/i.test(latestUserMessage);
   const mentionsGeometryDash = /geometry\s*dash|\bGD\b|gdbrowser/i.test(latestUserMessage) ||
-    gdLevelFollowup || gdFollowupPlayer;
+    gdLevelFollowup || gdFollowupPlayer || gdDailyFollowup || gdMostLikedFollowup || standaloneGDLookup;
   const explicitLevelId = latestUserMessage.match(/(?:level\s*(?:id)?\s*[:#]?\s*|\bid\s*[:#]\s*)(\d{1,12})/i);
   const gdIdFromContext = mentionsGeometryDash
     ? latestUserMessage.match(/\b(?:level|id)\s+(\d{1,12})\b/i)
