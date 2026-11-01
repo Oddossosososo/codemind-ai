@@ -751,6 +751,31 @@ function decodeSearchHtml(value) {
     .replace(/&gt;/g, ">").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)));
 }
 
+const gdLiveCache = new Map();
+
+async function fetchGDBrowserJSON(path, cacheMs = 30000) {
+  const key = String(path);
+  const cached = gdLiveCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.data;
+
+  const response = await fetch("https://gdbrowser.com/api/" + key, {
+    headers: { "Accept": "application/json", "User-Agent": "GyattGPT-AI/1.0" },
+    signal: AbortSignal.timeout(12000)
+  });
+  if (!response.ok) throw new Error("GDBrowser returned HTTP " + response.status);
+  const data = await response.json();
+  if (data === null || data === undefined || data === "-1" ||
+      (typeof data === "object" && !Array.isArray(data) && data.error)) {
+    throw new Error("GDBrowser returned no data");
+  }
+  gdLiveCache.set(key, { data, expiresAt: Date.now() + cacheMs });
+  if (gdLiveCache.size > 100) {
+    const oldestKey = gdLiveCache.keys().next().value;
+    gdLiveCache.delete(oldestKey);
+  }
+  return data;
+}
+
 async function fetchGDBrowserLevel(levelId) {
   const cleanId = String(levelId || "");
   if (!/^\d{1,12}$/.test(cleanId)) return null;
@@ -1030,6 +1055,47 @@ app.post("/api/chat", async (req, res) => {
     ? latestUserMessage.match(/\b(?:level|id)\s+(\d{1,12})\b/i)
     : null;
   const gdLevelId = explicitLevelId?.[1] || gdIdFromContext?.[1];
+  if (mentionsGeometryDash && !gdLevelId) {
+    const text = latestUserMessage;
+    const dailyWeekly = text.match(/\\b(daily|weekly)\\b/i);
+    const profileMatch = text.match(/\\b(?:profile|stats|statistics|player)\\s+(?:of\\s+)?([A-Za-z0-9_-]{2,32})\\b/i)
+      || text.match(/\\b(?:user|player)\\s+([A-Za-z0-9_-]{2,32})\\s+(?:profile|stats)\\b/i);
+    const asksLeaderboard = /\\b(leaderboard|top players|top creators|global rankings)\\b/i.test(text);
+    const asksGDLive = dailyWeekly || profileMatch || asksLeaderboard;
+
+    if (asksGDLive) {
+      try {
+        let data;
+        let label;
+        let sourceUrl;
+        if (dailyWeekly) {
+          const kind = dailyWeekly[1].toLowerCase();
+          data = await fetchGDBrowserJSON("level/" + kind, 60000);
+          label = "Current Geometry Dash " + kind + " level";
+          sourceUrl = "https://gdbrowser.com/" + (data?.id || kind);
+        } else if (profileMatch) {
+          const player = profileMatch[1];
+          data = await fetchGDBrowserJSON("profile/" + encodeURIComponent(player), 60000);
+          label = "Live Geometry Dash player profile for " + player;
+          sourceUrl = "https://gdbrowser.com/profile/" + encodeURIComponent(player);
+        } else {
+          data = await fetchGDBrowserJSON("leaderboard?count=10", 60000);
+          label = "Live Geometry Dash global leaderboard (top 10)";
+          sourceUrl = "https://gdbrowser.com/leaderboard";
+        }
+        systemContent += "\\n\\nLIVE GEOMETRY DASH DATA — " + label +
+          "\\nRetrieved: " + new Date().toISOString() +
+          "\\nSource: " + sourceUrl +
+          "\\nUse this retrieved data as factual context. State when a field is missing; never invent stats or rankings.\\n" +
+          JSON.stringify(data).slice(0, 18000);
+      } catch (error) {
+        console.warn("Live Geometry Dash data lookup failed:", error.message);
+        systemContent += "\\n\\nLIVE GEOMETRY DASH DATA: The requested live lookup failed (" +
+          error.message + "). Be transparent and do not invent current player stats, daily/weekly levels, or rankings.";
+      }
+    }
+  }
+
   if (mentionsGeometryDash && gdLevelId) {
     try {
       let level = null;
