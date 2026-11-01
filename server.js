@@ -8,6 +8,8 @@ app.set("trust proxy", 1);
 const PORT = Number(process.env.PORT) || 3000;
 const API_KEY = process.env.GROQ_API_KEY;
 const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
 const GITHUB_APP_ID = process.env.GITHUB_APP_ID;
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
@@ -168,7 +170,9 @@ app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     model: MODEL,
-    configured: Boolean(API_KEY),
+    configured: Boolean(API_KEY || GEMINI_API_KEY),
+    primaryConfigured: Boolean(API_KEY),
+    fallbackConfigured: Boolean(GEMINI_API_KEY),
     githubConfigured: githubReady(),
     githubOAuthConfigured: Boolean(GITHUB_CLIENT_SECRET)
   });
@@ -1113,8 +1117,8 @@ app.post("/api/images/generate", async (req, res) => {
 });
 
 app.post("/api/chat", async (req, res) => {
-  if (!API_KEY) {
-    return res.status(503).json({ error: "The server owner needs to configure GROQ_API_KEY." });
+  if (!API_KEY && !GEMINI_API_KEY) {
+    return res.status(503).json({ error: "Configure GROQ_API_KEY or GEMINI_API_KEY in the server environment." });
   }
 
   const incoming = Array.isArray(req.body?.messages) ? limitConversationMessages(req.body.messages.slice(-8), 3000, 1200) : req.body?.messages;
@@ -1415,11 +1419,49 @@ app.post("/api/chat", async (req, res) => {
     }
   }
 
+  const requestGemini = async () => {
+    if (!GEMINI_API_KEY) return null;
+    const contents = allowed.map(item => ({
+      role: item.role === "assistant" ? "model" : "user",
+      parts: [{ text: item.content }]
+    }));
+    const response = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/" +
+      encodeURIComponent(GEMINI_MODEL) + ":generateContent?key=" + encodeURIComponent(GEMINI_API_KEY),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemContent }] },
+          contents,
+          generationConfig: { temperature: 0.6, maxOutputTokens: 4096 }
+        }),
+        signal: AbortSignal.timeout(60000)
+      }
+    );
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = String(data?.error?.message || "Unknown Gemini error").slice(0, 240);
+      throw new Error("Gemini fallback failed (" + response.status + "): " + detail);
+    }
+    const reply = (data?.candidates?.[0]?.content?.parts || [])
+      .map(part => typeof part.text === "string" ? part.text : "")
+      .join("");
+    if (!reply.trim()) throw new Error("Gemini returned no message.");
+    return reply;
+  };
+
   try {
+    if (!API_KEY) {
+      const reply = await requestGemini();
+      if (!reply) return res.status(503).json({ error: "No AI provider is configured." });
+      return res.json({ reply, provider: "Gemini fallback" });
+    }
+
     const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${API_KEY}`,
+        "Authorization": "Bearer " + API_KEY,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
@@ -1435,6 +1477,20 @@ app.post("/api/chat", async (req, res) => {
     if (!upstream.ok) {
       const providerMessage = String(result?.error?.message || "Unknown provider error").slice(0, 300);
       console.error("Groq API error:", upstream.status, providerMessage);
+
+      if ((upstream.status === 429 || upstream.status >= 500) && GEMINI_API_KEY) {
+        try {
+          const reply = await requestGemini();
+          return res.json({ reply, provider: "Gemini fallback", fallbackReason: "Groq HTTP " + upstream.status });
+        } catch (fallbackError) {
+          console.error("Gemini fallback error:", fallbackError.message);
+          return res.status(502).json({
+            error: "Groq is unavailable and Gemini fallback failed. Check both providers' limits and configuration.",
+            code: "AI_PROVIDERS_UNAVAILABLE"
+          });
+        }
+      }
+
       if (upstream.status === 429) {
         const retryAfter = upstream.headers.get("retry-after");
         const requestReset = upstream.headers.get("x-ratelimit-reset-requests");
@@ -1461,10 +1517,18 @@ app.post("/api/chat", async (req, res) => {
     if (typeof reply !== "string" || !reply.trim()) {
       return res.status(502).json({ error: "The AI provider returned no message." });
     }
-    res.json({ reply });
+    res.json({ reply, provider: "Groq" });
   } catch (error) {
     console.error("Chat request failed:", error.message);
-    res.status(502).json({ error: "Couldn't reach the AI provider. Try again shortly." });
+    if (GEMINI_API_KEY) {
+      try {
+        const reply = await requestGemini();
+        return res.json({ reply, provider: "Gemini fallback", fallbackReason: "Groq connection failed" });
+      } catch (fallbackError) {
+        console.error("Gemini fallback error:", fallbackError.message);
+      }
+    }
+    res.status(502).json({ error: "Couldn't reach the AI providers. Try again shortly." });
   }
 });
 
