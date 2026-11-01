@@ -196,22 +196,27 @@ function isWebSearchRequest(text) {
 }
 
 // Choose sources from the subject instead of sending every research question to a generic search.
-function buildResearchSearchPlan(text) {
+function buildResearchSearchPlan(text, context = "") {
   const value = String(text || "");
-  const science = /\b(science|scientific|biology|biolog(y|ical)|cell|cells|mitochondri\w*|organell?e?s?|physics|chemistry|chemical|astronomy|space|planet|climate|ecosystem|evolution|genetics|DNA|RNA|anatomy|physiology|geology|microbiology|photosynthesis|cellular respiration|ATP|disease|medical research)\b/i.test(value);
+  const contextText = String(context || "");
+  const combined = value + " " + contextText;
+  const sciencePattern = /\b(science|scientific|biology|biolog(y|ical)|cell|cells|mitochondri\w*|organell?e?s?|physics|chemistry|chemical|astronomy|space|planet|climate|ecosystem|evolution|genetics|DNA|RNA|anatomy|physiology|geology|microbiology|photosynthesis|cellular respiration|ATP|disease|medical research)\b/i;
+  const science = sciencePattern.test(value) || sciencePattern.test(contextText);
   const asksForVideo = /\b(youtube|youtube video|yt video|video(s)?|watch|tutorial video)\b/i.test(value);
   const asksForLinks = /\b(link(s)?|source(s)?|website(s)?|reference(s)?)\b/i.test(value);
+  const topicTerms = [...new Set((combined.match(/\b(?:mitochondri\w*|organell?e?s?|biology|physics|chemistry|astronomy|climate|ecosystem|evolution|genetics|DNA|RNA|anatomy|physiology|geology|microbiology|photosynthesis|cellular respiration|ATP|cells?)\b/gi) || []).map(term => term.toLowerCase()))].slice(0, 8);
+  const queryBase = value.length > 150 ? value.slice(0, 150) : [value, ...topicTerms].filter(Boolean).join(" ");
 
   if (asksForVideo) {
-    return { type: "video", query: value + " site:youtube.com/watch OR site:youtu.be" };
+    return { type: "video", query: queryBase + " site:youtube.com/watch OR site:youtu.be" };
   }
   if (science) {
     return {
       type: "science",
-      query: value + " (site:nih.gov OR site:ncbi.nlm.nih.gov OR site:nature.com OR site:science.org OR site:nasa.gov OR site:noaa.gov OR site:usgs.gov)"
+      query: queryBase + " (site:nih.gov OR site:ncbi.nlm.nih.gov OR site:nature.com OR site:science.org OR site:nasa.gov OR site:noaa.gov OR site:usgs.gov)"
     };
   }
-  if (asksForLinks) return { type: "links", query: value };
+  if (asksForLinks) return { type: "links", query: queryBase };
   return null;
 }
 
@@ -290,7 +295,8 @@ async function sendMessage(text) {
     const useEditWorkflow = Boolean(activeGithubRepo && asksForEdit);
     const useRepositoryContext = Boolean(activeGithubRepo && projectRelated);
     let webResults = [];
-    const researchPlan = buildResearchSearchPlan(content);
+    const recentUserContext = messages.slice(-8).filter(item => item.role === "user").map(item => item.content).join(" ");
+    const researchPlan = buildResearchSearchPlan(content, recentUserContext);
     // Automatically research science questions and link/video requests; keep casual chat fast.
     if (isWebSearchRequest(content) || researchPlan) {
       try {
