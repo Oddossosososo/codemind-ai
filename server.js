@@ -917,7 +917,7 @@ app.post("/api/search", async (req, res) => {
 });
 
 const imageDailyUsage = new Map();
-const IMAGE_DAILY_LIMIT = 1;
+const IMAGE_DAILY_LIMIT = 3;
 
 function imageUsageKey(req) {
   const address = req.ip || req.socket?.remoteAddress || "unknown";
@@ -954,7 +954,7 @@ app.post("/api/images/generate", async (req, res) => {
 
   if (usage.used + usage.inFlight >= IMAGE_DAILY_LIMIT) {
     return res.status(429).json({
-      error: "You've used your 1 free image for today. Come back tomorrow!"
+      error: "You've used all 3 free images for today. Your limit resets at midnight Adelaide time."
     });
   }
 
@@ -967,7 +967,7 @@ app.post("/api/images/generate", async (req, res) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "google/nano-banana-2:free",
+        model: "google/nano-banana-2-lite:free",
         prompt,
         size: "auto",
         response_format: "url",
@@ -991,9 +991,9 @@ app.post("/api/images/generate", async (req, res) => {
     usage.used += 1;
     res.json({
       imageUrl,
-      model: "google/nano-banana-2:free",
+      model: "google/nano-banana-2-lite:free",
       dailyLimit: IMAGE_DAILY_LIMIT,
-      remainingToday: 0
+      remainingToday: Math.max(0, IMAGE_DAILY_LIMIT - usage.used)
     });
   } catch (error) {
     console.error("Image generation request failed:", error.message);
