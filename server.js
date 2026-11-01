@@ -847,7 +847,7 @@ async function fetchGDBrowserLevelSearch(query) {
         const id = String(item?.id ?? item?.levelID ?? "");
         const name = item?.name ?? item?.title ?? item?.level_name;
         const author = item?.author ?? item?.creator ?? item?.username ?? "Unknown";
-        if (!/^\\d{1,12}$/.test(id) || !name) return null;
+        if (!/^\d{1,12}$/.test(id) || !name) return null;
         return { name: String(name), id, author: String(author), searchSource: "GDBrowser" };
       }).filter(Boolean);
       if (results.length) return results;
@@ -1005,19 +1005,19 @@ app.post("/api/chat", async (req, res) => {
   } else {
     // Follow-up messages such as "send the ID" inherit the previous level request.
     const levelRequestText = [...userMessages].reverse().find(message =>
-      /\\bby\\s+[A-Za-z0-9_-]{2,32}\\b/i.test(message) ||
-      /\\b(?:find|look\\s+for|look\\s+up|search|what\\s+id|level\\s+id)\\b/i.test(message)
+      /\bby\s+[A-Za-z0-9_-]{2,32}\b/i.test(message) ||
+      /\b(?:find|look\s+for|look\s+up|search|what\s+id|level\s+id)\b/i.test(message)
     ) || latestUserMessage;
-    const asksForLevelId = /\\bwhat\\s+id\\s+is\\b|\\bwhat(?:'s|\\s+is)\\s+(?:the\\s+)?(?:level\\s+)?id\\s+(?:in|of|for)\\b|\\b(?:level\\s+)?id\\s+(?:of|for)\\b|\\b(?:find|look\\s+for|look\\s+up|search(?:\\s+for)?)\\s+(?:the\\s+)?(?:GD\\s+)?level\\s+/i.test(levelRequestText);
-    const creatorMatch = levelRequestText.match(/\\bby\\s+([A-Za-z0-9_-]{2,32})\\s*[?.!]*$/i);
+    const asksForLevelId = /\bwhat\s+id\s+is\b|\bwhat(?:'s|\s+is)\s+(?:the\s+)?(?:level\s+)?id\s+(?:in|of|for)\b|\b(?:level\s+)?id\s+(?:of|for)\b|\b(?:find|look\s+for|look\s+up|search(?:\s+for)?)\s+(?:the\s+)?(?:GD\s+)?level\s+/i.test(levelRequestText);
+    const creatorMatch = levelRequestText.match(/\bby\s+([A-Za-z0-9_-]{2,32})\s*[?.!]*$/i);
     const requestedCreator = creatorMatch?.[1] || null;
     const searchText = requestedCreator
       ? levelRequestText.slice(0, creatorMatch.index).trim()
       : levelRequestText;
-    const nameQuestion = searchText.match(/\\bwhat\\s+id\\s+is\\s+(.+?)\\s*$/i)
-      || searchText.match(/\\bwhat(?:'s|\\s+is)\\s+(?:the\\s+)?(?:level\\s+)?id\\s+(?:in|of|for)\\s+(.+?)\\s*$/i)
-      || searchText.match(/\\b(?:level\\s+)?id\\s+(?:of|for)\\s+(.+?)\\s*$/i)
-      || searchText.match(/\\b(?:find|look\\s+for|look\\s+up|search(?:\\s+for)?)\\s+(?:the\\s+)?(?:GD\\s+)?(?:level\\s+)?(.+?)\\s*$/i)
+    const nameQuestion = searchText.match(/\bwhat\s+id\s+is\s+(.+?)\s*$/i)
+      || searchText.match(/\bwhat(?:'s|\s+is)\s+(?:the\s+)?(?:level\s+)?id\s+(?:in|of|for)\s+(.+?)\s*$/i)
+      || searchText.match(/\b(?:level\s+)?id\s+(?:of|for)\s+(.+?)\s*$/i)
+      || searchText.match(/\b(?:find|look\s+for|look\s+up|search(?:\s+for)?)\s+(?:the\s+)?(?:GD\s+)?(?:level\s+)?(.+?)\s*$/i)
       || (requestedCreator ? [searchText, searchText] : null);
     const levelName = nameQuestion?.[1]
       ?.replace(/\b(?:in geometry dash|in gd|on geometry dash)\s*$/i, "")
