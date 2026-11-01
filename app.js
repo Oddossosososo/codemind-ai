@@ -28,6 +28,27 @@ if (!activeGithubRepo) {
 }
 let busy = false;
 let activeGithubFile = null;
+const AGENT_MODE_KEY = "codemind-agent-mode-v1";
+let agentModeEnabled = localStorage.getItem(AGENT_MODE_KEY) === "true";
+const agentModeButton = document.querySelector("#agentModeButton");
+function paintAgentMode() {
+  if (!agentModeButton) return;
+  agentModeButton.classList.toggle("is-active", agentModeEnabled);
+  agentModeButton.setAttribute("aria-pressed", String(agentModeEnabled));
+  agentModeButton.textContent = agentModeEnabled ? "✦ Agent mode ON" : "✦ Agent mode";
+  agentModeButton.title = agentModeEnabled
+    ? "Agent Mode is on: coordinator, specialists and reviewer"
+    : "Enable the multi-agent coding, research and review workflow";
+}
+if (agentModeButton) {
+  paintAgentMode();
+  agentModeButton.addEventListener("click", () => {
+    agentModeEnabled = !agentModeEnabled;
+    localStorage.setItem(AGENT_MODE_KEY, String(agentModeEnabled));
+    paintAgentMode();
+    showToast(agentModeEnabled ? "Agent Mode enabled." : "Agent Mode disabled.");
+  });
+}
 
 function loadMessages() {
   try {
@@ -118,7 +139,51 @@ function setBusy(value) {
   sendButton.disabled = value;
   sendButton.innerHTML = value ? '<span class="typing">···</span>' : '<span>↑</span>';
 }
-function renderChatEditProposals(edits, repo) {
+
+function renderAgentRunDetails(data) {
+  if (!data || (!data.plan && !Array.isArray(data.agents))) return;
+  const panel = document.createElement("section");
+  panel.className = "agent-run-details";
+  const heading = document.createElement("strong");
+  heading.textContent = "✦ AGENT TEAM · " + (Array.isArray(data.agents) ? data.agents.length : 0) + " SPECIALISTS";
+  panel.appendChild(heading);
+  if (data.repository) {
+    const repo = document.createElement("p");
+    repo.className = "agent-run-repo";
+    repo.textContent = "Repository inspected: " + data.repository;
+    panel.appendChild(repo);
+  }
+  if (data.plan && Array.isArray(data.plan.steps)) {
+    const planTitle = document.createElement("div");
+    planTitle.className = "agent-run-subtitle";
+    planTitle.textContent = data.plan.goal || "Execution plan";
+    panel.appendChild(planTitle);
+    const list = document.createElement("ol");
+    data.plan.steps.forEach(step => {
+      const item = document.createElement("li");
+      item.textContent = step;
+      list.appendChild(item);
+    });
+    panel.appendChild(list);
+  }
+  (data.agents || []).forEach(agent => {
+    const details = document.createElement("details");
+    details.className = "agent-run-agent";
+    const summary = document.createElement("summary");
+    summary.textContent = agent.role || "Specialist";
+    const body = document.createElement("p");
+    body.textContent = agent.result || "";
+    details.append(summary, body);
+    panel.appendChild(details);
+  });
+  const note = document.createElement("p");
+  note.className = "agent-run-footnote";
+  note.textContent = "Agents analysed the task using Groq. No code was executed and no GitHub changes were committed automatically.";
+  panel.appendChild(note);
+  messagesEl.appendChild(panel);
+  panel.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+\nfunction renderChatEditProposals(edits, repo) {
   if (!Array.isArray(edits) || !edits.length) return;
   const panel = document.createElement("section");
   panel.className = "chat-edit-proposals";
@@ -292,7 +357,8 @@ async function sendMessage(text) {
       const projectRelated = isProjectRelatedRequest(content) || Boolean(linkOnlyMessage && priorEditIntent);
     const asksForEdit = /\b(fix|change|edit|update|add|remove|implement|build|create|make|write|improve|enhance|upgrade|rewrite|refactor|modify|repair|patch|optimize|style|restyle|redesign|modernize)\b/i.test(editInstruction) &&
       (isProjectRelatedRequest(editInstruction) || Boolean(activeGithubRepo));
-    const useEditWorkflow = Boolean(activeGithubRepo && asksForEdit);
+    const useAgentMode = agentModeEnabled;
+    const useEditWorkflow = Boolean(!useAgentMode && activeGithubRepo && asksForEdit);
     const useRepositoryContext = Boolean(activeGithubRepo && projectRelated);
     let webResults = [];
     const recentUserContext = messages.slice(-8).filter(item => item.role === "user").map(item => item.content).join(" ");
@@ -320,13 +386,15 @@ async function sendMessage(text) {
       }
     }
     pending.querySelector(".typing").textContent = "Thinking···";
-    const endpoint = useEditWorkflow ? "/api/github/chat-edit" : "/api/chat";
+    const endpoint = useAgentMode ? "/api/agent/run" : (useEditWorkflow ? "/api/github/chat-edit" : "/api/chat");
     const preferenceMessages = messages.slice(useEditWorkflow ? -12 : -20).map(item => ({ ...item }));
     const preferenceContext = getPreferenceInstruction();
     const projectMemoryContext = getProjectMemoryContext();
-    const payload = useEditWorkflow
-      ? { repo: activeGithubRepo, messages: preferenceMessages, editInstruction, preferences: preferenceContext, projectMemory: projectMemoryContext }
-      : { messages: preferenceMessages, preferences: preferenceContext, projectMemory: projectMemoryContext, ...(useRepositoryContext ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) };
+    const payload = useAgentMode
+      ? { messages: preferenceMessages, preferences: preferenceContext, projectMemory: projectMemoryContext, ...(activeGithubRepo ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) }
+      : (useEditWorkflow
+        ? { repo: activeGithubRepo, messages: preferenceMessages, editInstruction, preferences: preferenceContext, projectMemory: projectMemoryContext }
+        : { messages: preferenceMessages, preferences: preferenceContext, projectMemory: projectMemoryContext, ...(useRepositoryContext ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) });
     let response = await fetch(API_BASE_URL + endpoint, {
       method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(payload)
     });
@@ -351,6 +419,7 @@ async function sendMessage(text) {
     messages.push({ role: "assistant", content: "I couldn't connect: " + error.message + "\n\nCheck that the CodeMind AI backend is deployed and GitHub is connected." }); saveMessages();
   } finally {
     setBusy(false); render();
+    if (window.lastAgentRun && agentModeEnabled) { renderAgentRunDetails(window.lastAgentRun); window.lastAgentRun = null; }
     if (chatEditResult) renderChatEditProposals(chatEditResult, activeGithubRepo);
     input.focus();
   }
