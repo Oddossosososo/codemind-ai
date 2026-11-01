@@ -50,6 +50,49 @@ function formatText(value) {
   safe = safe.replace(/`([^`\n]+)`/g, '<code>$1</code>');
   return safe;
 }
+function linkifyMessageText(container) {
+  if (!container) return;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parent = node.parentElement;
+      if (!parent || parent.closest("a, code, pre, script, style")) return NodeFilter.FILTER_REJECT;
+      return /https?:\/\//i.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    }
+  });
+  const textNodes = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode);
+  const urlPattern = /https?:\/\/[^\s<>"']+/g;
+  for (const textNode of textNodes) {
+    const text = textNode.nodeValue;
+    const fragment = document.createDocumentFragment();
+    let lastIndex = 0;
+    let match;
+    while ((match = urlPattern.exec(text)) !== null) {
+      const rawUrl = match[0];
+      const url = rawUrl.replace(/[),.!?;:]+$/, "");
+      if (!url) continue;
+      const start = match.index;
+      fragment.append(document.createTextNode(text.slice(lastIndex, start)));
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error("Unsupported URL protocol");
+        const link = document.createElement("a");
+        link.href = parsed.href;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = url;
+        fragment.append(link);
+        lastIndex = start + url.length;
+      } catch {
+        fragment.append(document.createTextNode(rawUrl));
+        lastIndex = start + rawUrl.length;
+      }
+    }
+    if (lastIndex === 0) continue;
+    fragment.append(document.createTextNode(text.slice(lastIndex)));
+    textNode.replaceWith(fragment);
+  }
+}
 function render() {
   welcome.hidden = messages.length > 0;
   messagesEl.innerHTML = messages.map(message => `
@@ -60,6 +103,7 @@ function render() {
         <div class="message-text">${formatText(message.content)}</div>
       </div>
     </article>`).join("");
+  linkifyMessageText(messagesEl);
   messagesEl.scrollIntoView({ block: "end", behavior: "smooth" });
 }
 function setBusy(value) {
