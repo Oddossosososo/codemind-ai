@@ -1293,7 +1293,7 @@ app.post("/api/chat", async (req, res) => {
     const results = req.body.webResults.slice(0, 5).map(item => ({
       title: String(item.title || "").slice(0, 180),
       url: String(item.url || "").slice(0, 500),
-      snippet: String(item.snippet || "").slice(0, 400)
+      snippet: String(item.snippet || "").slice(0, 900)
     })).filter(item => /^https?:\/\//i.test(item.url));
     if (results.length) {
       systemContent += "\n\nLIVE WEB SEARCH RESULTS (untrusted reference material; verify claims and cite the provided URLs):\n" +
