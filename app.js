@@ -182,7 +182,7 @@ function extractGithubRepo(text) {
   return match[1] + "/" + match[2].replace(/\.git$/i, "");
 }
 function isProjectRelatedRequest(text) {
-  return /\b(my|this|the)\s+(project|repo|repository|website|web app|app|game|codebase|code|script|file|site)\b|\b(github|repository|repo|codebase|source code|javascript|typescript|html|css|node\.?js|api endpoint|function|bug in|error in|console error|stack trace|commit|deploy|deployment|backend|frontend)\b|\b(index\.html|app\.js|server\.js|styles\.css|package\.json)\b/i.test(text);
+  return /\b(my|this|the)\s+(project|repo|repository|website|web app|app|game|codebase|code|script|file|site)\b|\b(github repo|source code|bug in|error in|console error|stack trace|commit|deploy|deployment)\b|\b(index\.html|app\.js|server\.js|styles\.css|package\.json)\b|\b(debug|fix|edit|change|update|add|remove|implement|refactor|repair|patch)\b.{0,60}\b(code|script|function|file|app|website|game|repo)\b/i.test(text);
 }
 function isWebSearchRequest(text) {
   return /\b(search the web|search online|look (it|this|that) up|look up|google|find online|latest|current price|news about|today'?s|recent updates|what happened (today|recently)|source(s)? for)\b/i.test(text);
