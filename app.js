@@ -189,7 +189,7 @@ function extractGithubRepo(text) {
   return match[1] + "/" + match[2].replace(/\.git$/i, "");
 }
 function isProjectRelatedRequest(text) {
-  return /\b(my|this|the)\s+(project|repo|repository|website|web app|app|game|codebase|code|script|file|site)\b|\b(github repo|source code|bug in|error in|console error|stack trace|commit|deploy|deployment)\b|\b(index\.html|app\.js|server\.js|styles\.css|package\.json)\b|\b(debug|fix|edit|change|update|add|remove|implement|refactor|repair|patch)\b.{0,60}\b(code|script|function|file|app|website|game|repo)\b/i.test(text);
+  return /\b(my|this|the)\s+(project|repo|repository|website|web app|app|game|codebase|code|script|file|site|github)\b|\b(github repo|source code|bug in|error in|console error|stack trace|commit|deploy|deployment)\b|\b(index\.html|app\.js|server\.js|styles?\.css|stylesheet|package\.json)\b|\b(css|stylesheet|style sheet|styling)\b|\b(debug|fix|edit|change|update|add|remove|implement|refactor|repair|patch|improve|enhance|upgrade|modernize)\b.{0,70}\b(code|script|function|file|app|website|game|repo|css|style|design|ui)\b/i.test(text);
 }
 function isWebSearchRequest(text) {
   return /\\b(search the web|search online|look (it|this|that) up|look up|google|find online|latest|current|live|right now|as of today|today|tonight|this week|this month|recent|breaking|news|weather|forecast|temperature|score|scores|standings|schedule|fixtures|results|release date|version|update|price|prices|stock|shares|exchange rate|currency|availability|open now|traffic|election|polls|who won|when does .* release|is .* still|has .* happened|source(s)? for)\\b/i.test(text);
@@ -230,6 +230,14 @@ async function sendMessage(text) {
     return;
   }
   const linkedRepo = extractGithubRepo(content);
+  const linkOnlyMessage = Boolean(linkedRepo && !content.replace(/https?:\/\/(?:www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+/ig, "").trim());
+  const priorEditIntent = [...messages].reverse().find(item =>
+    item?.role === "user" &&
+    !extractGithubRepo(item.content) &&
+    isProjectRelatedRequest(item.content) &&
+    /\b(fix|change|edit|update|add|remove|implement|build|create|make|write|improve|enhance|upgrade|rewrite|refactor|modify|repair|patch|optimize|style|restyle|redesign)\b/i.test(item.content)
+  );
+  const editInstruction = linkOnlyMessage && priorEditIntent ? priorEditIntent.content : content;
   if (linkedRepo) {
     try {
       const repositories = await loadRepositories();
@@ -256,8 +264,9 @@ async function sendMessage(text) {
   messagesEl.appendChild(pending);
   let chatEditResult = null;
   try {
-      const projectRelated = isProjectRelatedRequest(content);
-    const asksForEdit = projectRelated && /\b(fix|change|edit|update|add|remove|implement|build|create|make|write|improve|enhance|upgrade|rewrite|refactor|modify|repair|patch|optimize)\b/i.test(content);
+      const projectRelated = isProjectRelatedRequest(content) || Boolean(linkOnlyMessage && priorEditIntent);
+    const asksForEdit = /\b(fix|change|edit|update|add|remove|implement|build|create|make|write|improve|enhance|upgrade|rewrite|refactor|modify|repair|patch|optimize|style|restyle|redesign|modernize)\b/i.test(editInstruction) &&
+      (isProjectRelatedRequest(editInstruction) || Boolean(activeGithubRepo));
     const useEditWorkflow = Boolean(activeGithubRepo && asksForEdit);
     const useRepositoryContext = Boolean(activeGithubRepo && projectRelated);
     let webResults = [];
@@ -288,7 +297,7 @@ async function sendMessage(text) {
     const preferenceContext = getPreferenceInstruction();
     const projectMemoryContext = getProjectMemoryContext();
     const payload = useEditWorkflow
-      ? { repo: activeGithubRepo, messages: preferenceMessages, preferences: preferenceContext, projectMemory: projectMemoryContext }
+      ? { repo: activeGithubRepo, messages: preferenceMessages, editInstruction, preferences: preferenceContext, projectMemory: projectMemoryContext }
       : { messages: preferenceMessages, preferences: preferenceContext, projectMemory: projectMemoryContext, ...(useRepositoryContext ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) };
     let response = await fetch(API_BASE_URL + endpoint, {
       method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(payload)
