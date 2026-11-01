@@ -34,7 +34,7 @@ app.use((req, res, next) => {
 });
 
 app.disable("x-powered-by");
-app.use(express.json({ limit: "32kb" }));
+app.use(express.json({ limit: "512kb" }));
 app.use(express.static(path.join(__dirname)));
 
 const SYSTEM_PROMPT = `You are CodeMind, a friendly, capable coding-focused AI assistant with an integrated, read-only GitHub repository reader.
