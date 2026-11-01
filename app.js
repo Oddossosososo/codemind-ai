@@ -139,7 +139,7 @@ async function sendMessage(text) {
   messagesEl.appendChild(pending);
   let chatEditResult = null;
   try {
-    const asksForEdit = /\\b(fix|change|edit|update|add|remove|implement|build|create|rewrite|refactor|modify|repair)\\b/i.test(content);
+    const asksForEdit = /\b(fix|change|edit|update|add|remove|implement|build|create|rewrite|refactor|modify|repair)\b/i.test(content);
     const useEditWorkflow = Boolean(activeGithubRepo && asksForEdit);
     const endpoint = useEditWorkflow ? "/api/github/chat-edit" : "/api/chat";
     const payload = useEditWorkflow
@@ -244,6 +244,12 @@ async function loadGithubStatus() {
     repoSelect.innerHTML = '<option value="">Connect your GitHub account first</option>';
   }
 }
+repoSelect.addEventListener("change", () => {
+  activeGithubRepo = repoSelect.value;
+  activeRepoSelect.value = activeGithubRepo;
+  if (activeGithubRepo) localStorage.setItem(REPO_STORAGE_KEY, activeGithubRepo);
+  else localStorage.removeItem(REPO_STORAGE_KEY);
+});
 async function loadRepositories() {
   const data = await githubFetch("/api/github/repos");
   const options = data.repositories.map(repo => '<option value="' + escapeHTML(repo.full_name) + '">' +
@@ -260,6 +266,7 @@ async function loadRepositories() {
 }
 activeRepoSelect.addEventListener("change", () => {
   activeGithubRepo = activeRepoSelect.value;
+  repoSelect.value = activeGithubRepo;
   if (activeGithubRepo) localStorage.setItem(REPO_STORAGE_KEY, activeGithubRepo);
   else localStorage.removeItem(REPO_STORAGE_KEY);
   showToast(activeGithubRepo ? "Chat is now connected to " + activeGithubRepo : "Repository context turned off.");
