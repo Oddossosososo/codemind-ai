@@ -220,3 +220,21 @@
 .agent-run-agent p{margin:0;padding:0 11px 11px;color:#b3bdd0;font-size:10px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}
 .agent-run-footnote{margin:12px 0 0;padding-top:10px;border-top:1px solid #292e40}
 @media(max-width:600px){.agent-run-details{width:100%;margin-left:0}.agent-mode-button{padding:0 8px;font-size:8px}}
+
+
+/* Hourly chat quota keypad */
+.chat-limit-overlay{position:fixed;inset:0;z-index:3000;display:grid;place-items:center;padding:18px;background:#05070ddd;backdrop-filter:blur(12px);animation:accountFade .18s ease}
+.chat-limit-dialog{width:min(370px,100%);padding:25px;border:1px solid #514477;border-radius:17px;background:linear-gradient(155deg,#171529,#101521);box-shadow:0 25px 100px #000b}
+.chat-limit-eyebrow{font:9px var(--mono);letter-spacing:1.7px;color:#b9a0ff}
+.chat-limit-dialog h2{margin:8px 0;font-size:23px;letter-spacing:-.7px;color:#f0edff}
+.chat-limit-dialog>p{font-size:11px;line-height:1.65;color:#9ba4b9}
+.chat-limit-display{height:48px;display:grid;place-items:center;margin:17px 0 13px;border:1px solid #4b4268;border-radius:9px;background:#090d17;color:#e3d8ff;font:700 22px var(--mono);letter-spacing:5px}
+.chat-limit-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.chat-limit-key{height:43px;border:1px solid #33394c;border-radius:8px;background:#1a2030;color:#e5e8f2;font:600 14px var(--sans);cursor:pointer}
+.chat-limit-key:hover{border-color:#9278d2;background:#28223c}
+.chat-limit-key.wide{font-size:10px;color:#b9a9dd}
+.chat-limit-key.utility{font-size:17px}
+.chat-limit-status{min-height:18px;margin:9px 0!important;color:#e7a6b2!important;font-size:10px!important}
+.chat-limit-unlock{width:100%;height:42px;border:0;border-radius:8px;background:linear-gradient(110deg,#8b5cf6,#6752c9);color:#fff;font:700 11px var(--sans);cursor:pointer}
+.chat-limit-unlock:disabled{opacity:.4;cursor:not-allowed}
+.chat-limit-close{display:block;margin:12px auto 0;border:0;background:transparent;color:#8992a7;font:10px var(--sans);cursor:pointer}
