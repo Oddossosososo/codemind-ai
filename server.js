@@ -803,7 +803,7 @@ async function fetchGDBrowserLevelSearch(query) {
         : Array.isArray(payload?.results) ? payload.results
         : Array.isArray(payload?.data) ? payload.data
         : [];
-      const matches = rows.filter(item => item && /^\\d{1,12}$/.test(String(item.id || "")))
+      const matches = rows.filter(item => item && /^\d{1,12}$/.test(String(item.id || "")))
         .slice(0, 5);
       if (matches.length) return matches.map(item => ({
         name: String(item.name || "Unknown"),
@@ -912,21 +912,21 @@ app.post("/api/chat", async (req, res) => {
       console.warn("GDBrowser level lookup failed:", error.message);
       systemContent += "\n\nGD BROWSER LEVEL LOOKUP: The live lookup for ID " + gdLevelId + " failed. Be transparent and do not invent level details.";
     }
-  } else if (mentionsGeometryDash && /\\b(?:id|level id)\\b/i.test(latestUserMessage)) {
-    const nameQuestion = latestUserMessage.match(/\\bwhat(?:'s| is)\\s+(?:the\\s+)?(?:level\\s+)?id\\s+(?:in|of|for)\\s+([^?!.\\n]{2,100})/i)
-      || latestUserMessage.match(/\\b(?:find|look up|search(?: for)?)\\s+(?:the\\s+)?(?:GD\\s+)?level\\s+([^?!.\\n]{2,100})/i);
-    const levelName = nameQuestion?.[1]?.replace(/\\b(?:in geometry dash|in gd|on geometry dash)\\s*$/i, "").trim();
+  } else if (mentionsGeometryDash && /\b(?:id|level id)\b/i.test(latestUserMessage)) {
+    const nameQuestion = latestUserMessage.match(/\bwhat(?:'s| is)\s+(?:the\s+)?(?:level\s+)?id\s+(?:in|of|for)\s+([^?!.\n]{2,100})/i)
+      || latestUserMessage.match(/\b(?:find|look up|search(?: for)?)\s+(?:the\s+)?(?:GD\s+)?level\s+([^?!.\n]{2,100})/i);
+    const levelName = nameQuestion?.[1]?.replace(/\b(?:in geometry dash|in gd|on geometry dash)\s*$/i, "").trim();
     if (levelName) {
       try {
         const matches = await fetchGDBrowserLevelSearch(levelName);
         const exact = matches.filter(item => item.name.toLowerCase() === levelName.toLowerCase());
         const candidates = exact.length ? exact : matches;
         systemContent += candidates.length
-          ? "\\n\\nGD BROWSER LEVEL SEARCH RESULTS (searched by level name: " + levelName + "; use these real results, do not guess):\\n" + JSON.stringify(candidates)
-          : "\\n\\nGD BROWSER LEVEL SEARCH: No matching level was returned for name " + levelName + ". Say it could not be verified; do not invent an ID.";
+          ? "\n\nGD BROWSER LEVEL SEARCH RESULTS (searched by level name: " + levelName + "; use these real results, do not guess):\n" + JSON.stringify(candidates)
+          : "\n\nGD BROWSER LEVEL SEARCH: No matching level was returned for name " + levelName + ". Say it could not be verified; do not invent an ID.";
       } catch (error) {
         console.warn("GDBrowser level search failed:", error.message);
-        systemContent += "\\n\\nGD BROWSER LEVEL SEARCH: The live name search for " + levelName + " failed. Be transparent and do not invent an ID.";
+        systemContent += "\n\nGD BROWSER LEVEL SEARCH: The live name search for " + levelName + " failed. Be transparent and do not invent an ID.";
       }
     }
   }
