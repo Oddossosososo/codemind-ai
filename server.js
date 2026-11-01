@@ -7,6 +7,22 @@ const PORT = Number(process.env.PORT) || 3000;
 const API_KEY = process.env.GROQ_API_KEY;
 const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
+// Allow requests only from the public CodeMind GitHub Pages site.
+const allowedOrigins = new Set(["https://oddossosososo.github.io"]);
+app.use((req, res, next) => {
+  const origin = req.get("Origin");
+  if (allowedOrigins.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  }
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(allowedOrigins.has(origin) ? 204 : 403);
+  }
+  next();
+});
+
 app.disable("x-powered-by");
 app.use(express.json({ limit: "32kb" }));
 app.use(express.static(path.join(__dirname)));
