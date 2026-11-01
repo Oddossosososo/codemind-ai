@@ -282,6 +282,7 @@ function buildResearchSearchPlan(text, context = "") {
     };
   }
   if (asksForLinks) return { type: "links", query: queryBase };
+  if (/\b(research|investigate|compare|evaluate|find evidence)\b/i.test(value)) return { type: "research", query: queryBase };
   return null;
 }
 
@@ -358,6 +359,7 @@ async function sendMessage(text) {
     const asksForEdit = /\b(fix|change|edit|update|add|remove|implement|build|create|make|write|improve|enhance|upgrade|rewrite|refactor|modify|repair|patch|optimize|style|restyle|redesign|modernize)\b/i.test(editInstruction) &&
       (isProjectRelatedRequest(editInstruction) || Boolean(activeGithubRepo));
     const useAgentMode = agentModeEnabled;
+    if (useAgentMode) window.lastAgentRun = null;
     const useEditWorkflow = Boolean(!useAgentMode && activeGithubRepo && asksForEdit);
     const useRepositoryContext = Boolean(activeGithubRepo && projectRelated);
     let webResults = [];
@@ -368,7 +370,8 @@ async function sendMessage(text) {
       try {
         pending.querySelector(".typing").textContent = researchPlan?.type === "science"
           ? "Checking trusted science sources···"
-          : researchPlan?.type === "video" ? "Finding relevant YouTube videos···" : "Searching the web···";
+          : researchPlan?.type === "video" ? "Finding relevant YouTube videos···"
+          : researchPlan?.type === "research" ? "Gathering research sources···" : "Searching the web···";
         const searchResponse = await fetch(API_BASE_URL + "/api/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -438,7 +441,7 @@ async function sendMessage(text) {
     messages.push({ role: "assistant", content: "I couldn't connect: " + error.message + "\n\nCheck that the CodeMind AI backend is deployed and GitHub is connected." }); saveMessages();
   } finally {
     setBusy(false); render();
-    if (window.lastAgentRun && agentModeEnabled) { renderAgentRunDetails(window.lastAgentRun); window.lastAgentRun = null; }
+    if (window.lastAgentRun) { renderAgentRunDetails(window.lastAgentRun); window.lastAgentRun = null; }
     if (chatEditResult) renderChatEditProposals(chatEditResult, activeGithubRepo);
     input.focus();
   }
