@@ -139,7 +139,7 @@ async function sendMessage(text) {
   messagesEl.appendChild(pending);
   let chatEditResult = null;
   try {
-    const asksForEdit = /\b(fix|change|edit|update|add|remove|implement|build|create|rewrite|refactor|modify|repair)\b/i.test(content);
+    const asksForEdit = /\b(fix|change|edit|update|add|remove|implement|build|create|make|write|improve|enhance|upgrade|rewrite|refactor|modify|repair|patch|optimize)\b/i.test(content);
     const useEditWorkflow = Boolean(activeGithubRepo && asksForEdit);
     const endpoint = useEditWorkflow ? "/api/github/chat-edit" : "/api/chat";
     const payload = useEditWorkflow
