@@ -117,11 +117,14 @@ function renderChatEditProposals(edits, repo) {
       approve.textContent = "Committed ✓";
       showToast("CodeMind changes committed.");
     } catch (error) {
-      status.textContent = completed
-        ? completed + " file(s) committed before an error: " + error.message
-        : error.message;
+      const permissionHint = /resource not accessible by integration|not permitted to .*contents|write access/i.test(error.message)
+        ? "GitHub blocked the write. Open GitHub App settings → Permissions & events → Repository permissions → Contents, set Read and write, save, then accept the permission update on the repository installation."
+        : "";
+      status.textContent = (completed
+        ? completed + " file(s) committed. Remaining changes were not committed. "
+        : "No files were committed. ") + error.message + (permissionHint ? "\n\n" + permissionHint : "");
       approve.disabled = false;
-      approve.textContent = "Retry remaining changes";
+      approve.textContent = completed ? "Retry remaining changes" : "Try approval again";
       entries.splice(0, completed);
     }
   });
