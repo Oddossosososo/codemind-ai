@@ -469,3 +469,90 @@ if (startupParams.get("github") === "connected") {
   });
 }
 render();
+
+
+/* Simple browser-only account: username label, no password or account features. */
+(function initLocalAccount() {
+  const KEY = "codemind-account-username-v1";
+  const profile = document.querySelector(".profile");
+  if (!profile) return;
+
+  const getUsername = () => {
+    try { return localStorage.getItem(KEY) || "Guest"; }
+    catch { return "Guest"; }
+  };
+
+  function paintProfile() {
+    const username = getUsername();
+    const avatar = profile.querySelector(".avatar");
+    const details = profile.querySelector("div:nth-child(2)");
+    if (avatar) avatar.textContent = username === "Guest" ? "G" : username.trim().charAt(0).toUpperCase();
+    if (details) {
+      details.querySelector("strong").textContent = username;
+      details.querySelector("span").textContent = username === "Guest" ? "Local account · set username" : "Local account";
+    }
+    profile.setAttribute("role", "button");
+    profile.setAttribute("tabindex", "0");
+    profile.setAttribute("aria-label", "Account settings");
+    profile.title = "Set your account username";
+  }
+
+  function openAccount() {
+    if (document.querySelector("#accountOverlay")) return;
+    const overlay = document.createElement("div");
+    overlay.id = "accountOverlay";
+    overlay.className = "account-overlay";
+    overlay.innerHTML = `
+      <section class="account-dialog" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
+        <button class="account-close" type="button" aria-label="Close">×</button>
+        <div class="account-mark">G</div>
+        <div class="account-eyebrow">YOUR PROFILE</div>
+        <h2 id="accountTitle">Your account</h2>
+        <p>This is a simple local profile. Choose the username shown in your workspace.</p>
+        <label for="accountUsername">Username</label>
+        <input id="accountUsername" maxlength="24" minlength="2" autocomplete="nickname" placeholder="Enter a username">
+        <div class="account-error" aria-live="polite"></div>
+        <button class="account-save" type="button">Save username</button>
+        <small>Saved only in this browser. No password or online account is created.</small>
+      </section>`;
+    document.body.appendChild(overlay);
+    const field = overlay.querySelector("#accountUsername");
+    const error = overlay.querySelector(".account-error");
+    field.value = getUsername() === "Guest" ? "" : getUsername();
+    const close = () => overlay.remove();
+    overlay.querySelector(".account-close").addEventListener("click", close);
+    overlay.addEventListener("click", event => { if (event.target === overlay) close(); });
+    overlay.querySelector(".account-save").addEventListener("click", () => {
+      const username = field.value.trim().replace(/\s+/g, " ");
+      if (username.length < 2) {
+        error.textContent = "Use at least 2 characters.";
+        field.focus();
+        return;
+      }
+      if (/[<>]/.test(username)) {
+        error.textContent = "Please choose a different username.";
+        field.focus();
+        return;
+      }
+      try { localStorage.setItem(KEY, username); }
+      catch { error.textContent = "This browser couldn't save the username."; return; }
+      paintProfile();
+      close();
+      if (typeof showToast === "function") showToast("Username saved.");
+    });
+    field.addEventListener("keydown", event => {
+      if (event.key === "Enter") overlay.querySelector(".account-save").click();
+      if (event.key === "Escape") close();
+    });
+    field.focus();
+  }
+
+  profile.addEventListener("click", openAccount);
+  profile.addEventListener("keydown", event => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openAccount();
+    }
+  });
+  paintProfile();
+})();
