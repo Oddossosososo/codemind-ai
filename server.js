@@ -915,11 +915,23 @@ app.post("/api/search", async (req, res) => {
   res.json({ query, provider: "Google/DuckDuckGo", results });
 });
 
+const imageDailyUsage = new Map();
+const IMAGE_DAILY_LIMIT = 1;
+
+function imageUsageKey(req) {
+  const address = req.ip || req.socket?.remoteAddress || "unknown";
+  return crypto.createHash("sha256").update(address).digest("hex");
+}
+
+function utcDayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 app.post("/api/images/generate", async (req, res) => {
-  const imageKey = process.env.POLLINATIONS_API_KEY;
+  const imageKey = process.env.IMAGEROUTER_API_KEY;
   if (!imageKey) {
     return res.status(503).json({
-      error: "Image generation isn't configured yet. Add POLLINATIONS_API_KEY to the Render environment."
+      error: "Image generation isn't configured yet. Add IMAGEROUTER_API_KEY to the Render environment."
     });
   }
 
@@ -931,39 +943,68 @@ app.post("/api/images/generate", async (req, res) => {
     return res.status(400).json({ error: "Image prompts must be 1,200 characters or fewer." });
   }
 
+  const day = utcDayKey();
+  const key = imageUsageKey(req);
+  let usage = imageDailyUsage.get(key);
+  if (!usage || usage.day !== day) {
+    usage = { day, used: 0, inFlight: 0 };
+    imageDailyUsage.set(key, usage);
+  }
+
+  if (usage.used + usage.inFlight >= IMAGE_DAILY_LIMIT) {
+    return res.status(429).json({
+      error: "You've used your 1 free image for today. Come back tomorrow!"
+    });
+  }
+
+  usage.inFlight += 1;
   try {
-    const upstream = await fetch("https://gen.pollinations.ai/v1/images/generations", {
+    const upstream = await fetch("https://api.imagerouter.io/v1/openai/images/generations", {
       method: "POST",
       headers: {
         "Authorization": "Bearer " + imageKey,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "black-forest-labs/flux.1-schnell",
+        model: "google/nano-banana-2:free",
         prompt,
-        n: 1,
-        size: "1024x1024",
-        response_format: "url"
+        size: "auto",
+        response_format: "url",
+        output_format: "webp"
       }),
       signal: AbortSignal.timeout(120000)
     });
     const result = await upstream.json().catch(() => ({}));
     if (!upstream.ok) {
-      console.error("Image provider error:", upstream.status, result?.error?.message || result?.error || "Unknown error");
+      console.error("ImageRouter error:", upstream.status, result?.error?.message || result?.error || "Unknown error");
       return res.status(upstream.status === 429 ? 429 : 502).json({
         error: upstream.status === 429
-          ? "The image provider is busy or the generation budget is exhausted. Try again later."
-          : "The image provider couldn't generate that image. Check the image API key, balance, and model permissions."
+          ? "Nano Banana's free image service is busy or its daily allowance has been reached. Try again later."
+          : "Nano Banana couldn't generate that image. Check the ImageRouter API key and model access."
       });
     }
     const imageUrl = result?.data?.[0]?.url;
     if (typeof imageUrl !== "string" || !/^https:\/\//i.test(imageUrl)) {
-      return res.status(502).json({ error: "The image provider returned no image URL." });
+      return res.status(502).json({ error: "ImageRouter returned no usable image URL." });
     }
-    res.json({ imageUrl, model: "black-forest-labs/flux.1-schnell" });
+    usage.used += 1;
+    res.json({
+      imageUrl,
+      model: "google/nano-banana-2:free",
+      dailyLimit: IMAGE_DAILY_LIMIT,
+      remainingToday: 0
+    });
   } catch (error) {
     console.error("Image generation request failed:", error.message);
-    res.status(502).json({ error: "Couldn't reach the image provider. Try again shortly." });
+    return res.status(502).json({ error: "Couldn't reach ImageRouter. Try again shortly." });
+  } finally {
+    usage.inFlight = Math.max(0, usage.inFlight - 1);
+    // Keep the in-memory quota map bounded.
+    if (imageDailyUsage.size > 10000) {
+      for (const [entryKey, entry] of imageDailyUsage) {
+        if (entry.day !== day) imageDailyUsage.delete(entryKey);
+      }
+    }
   }
 });
 
