@@ -454,6 +454,75 @@ app.post("/api/github/commit-file", requireOwner, async (req, res) => {
 });
 
 
+function limitConversationMessages(messages, maxChars, perMessage = 1200) {
+  let remaining = maxChars;
+  const kept = [];
+  for (let i = messages.length - 1; i >= 0 && remaining > 0; i--) {
+    const item = messages[i] || {};
+    const role = item.role === "assistant" ? "assistant" : "user";
+    const raw = typeof item.content === "string" ? item.content : "";
+    if (!raw.trim()) continue;
+    const content = raw.slice(-Math.min(perMessage, remaining));
+    kept.unshift({ role, content });
+    remaining -= content.length;
+  }
+  return kept;
+}
+
+function compactRelevantFile(content, terms, maxChars) {
+  if (content.length <= maxChars) return content;
+  const lines = content.split(/\r?\n/);
+  const selected = new Set();
+  const lineScores = lines.map((line, index) => {
+    const lower = line.toLowerCase();
+    let score = 0;
+    for (const term of terms) {
+      if (lower.includes(term)) score += Math.min(4, lower.split(term).length - 1);
+    }
+    return { index, score };
+  });
+
+  for (let i = 0; i < Math.min(lines.length, 30); i++) {
+    if (/^\s*(import|export|#!|\/\*|\/\/)/.test(lines[i])) selected.add(i);
+  }
+
+  const ranked = lineScores.filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index);
+  for (const item of ranked) {
+    for (let i = Math.max(0, item.index - 3); i <= Math.min(lines.length - 1, item.index + 3); i++) {
+      selected.add(i);
+    }
+    const preview = Array.from(selected).sort((a, b) => a - b)
+      .map(i => (i + 1) + ": " + lines[i]).join("\n");
+    if (preview.length >= maxChars * 0.85) break;
+  }
+
+  if (!ranked.length) {
+    return lines.slice(0, Math.max(1, Math.floor(maxChars / 100)))
+      .map((line, i) => (i + 1) + ": " + line).join("\n")
+      .slice(0, maxChars) + "\n[File excerpt shortened; no matching lines found]";
+  }
+
+  const output = [];
+  let previous = -2;
+  let used = 0;
+  for (const index of Array.from(selected).sort((a, b) => a - b)) {
+    if (index !== previous + 1) {
+      const marker = "\n... omitted lines before " + (index + 1) + " ...\n";
+      if (used + marker.length > maxChars) break;
+      output.push(marker);
+      used += marker.length;
+    }
+    const entry = (index + 1) + ": " + lines[index] + "\n";
+    if (used + entry.length > maxChars) break;
+    output.push(entry);
+    used += entry.length;
+    previous = index;
+  }
+  output.push("\n[Only relevant excerpts shown; original line numbers preserved]");
+  return output.join("").slice(0, maxChars);
+}
+
 async function readGithubRepositoryContext(repo, requestText) {
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) ||
       repo.split("/")[0].toLowerCase() !== GITHUB_OWNER) {
@@ -462,7 +531,7 @@ async function readGithubRepositoryContext(repo, requestText) {
     throw error;
   }
   const token = await getOwnerInstallationToken();
-  const auth = { Authorization: `Bearer ${token}` };
+  const auth = { Authorization: "Bearer " + token };
   const installed = await githubRequest("https://api.github.com/installation/repositories?per_page=100", {
     headers: auth
   });
@@ -472,56 +541,87 @@ async function readGithubRepositoryContext(repo, requestText) {
     error.status = 403;
     throw error;
   }
+
   const encodedBranch = encodeURIComponent(selected.default_branch);
   const tree = await githubRequest(
-    `https://api.github.com/repos/${repo}/git/trees/${encodedBranch}?recursive=1`,
+    "https://api.github.com/repos/" + repo + "/git/trees/" + encodedBranch + "?recursive=1",
     { headers: auth }
   );
-  const terms = String(requestText || "").toLowerCase().match(/[a-z0-9_.-]{2,}/g) || [];
+  const stopWords = new Set([
+    "the", "and", "for", "with", "that", "this", "from", "into", "make", "please",
+    "code", "file", "files", "change", "update", "fix", "add", "remove", "help",
+    "want", "need", "should", "could", "would", "have", "has", "are", "was"
+  ]);
+  const terms = Array.from(new Set(
+    (String(requestText || "").toLowerCase().match(/[a-z0-9_.-]{3,}/g) || [])
+      .filter(term => !stopWords.has(term))
+  )).slice(0, 30);
+
   const ignored = /(^|\/)(node_modules|\.git|dist|build|coverage|vendor)(\/|$)|\.(png|jpe?g|gif|webp|ico|woff2?|ttf|mp4|pdf|zip)$/i;
   const candidates = (tree.tree || []).filter(item =>
     item.type === "blob" && item.size <= 35000 && !ignored.test(item.path) &&
     /\.(js|mjs|cjs|ts|tsx|jsx|html|css|json|md|txt|yml|yaml|py|php|sql)$/i.test(item.path)
   );
-  function score(item) {
+
+  function pathScore(item) {
     const path = item.path.toLowerCase();
-    let value = 0;
-    if (/^(readme|package\.json|index\.html|server\.js|app\.js|src\/index|src\/app)/i.test(path)) value += 3;
+    let score = 0;
     for (const term of terms) {
-      if (path.includes(term)) value += term.length > 3 ? 5 : 2;
+      if (path.includes(term)) score += term.length >= 5 ? 8 : 4;
     }
-    if (/lock\.json$|\.min\.|\.map$/.test(path)) value -= 20;
-    return value;
+    if (/^(readme|package\.json|index\.html|server\.js|app\.js|src\/index|src\/app)/i.test(path)) score += 2;
+    if (/lock\.json$|\.min\.|\.map$/.test(path)) score -= 30;
+    return score;
   }
-  candidates.sort((a,b) => score(b)-score(a) || a.path.localeCompare(b.path));
-  const chosen = candidates.slice(0, 4);
-  const files = [];
-  let remaining = 14000;
-  for (const item of chosen) {
-    if (remaining <= 0) break;
+
+  candidates.sort((a, b) => pathScore(b) - pathScore(a) || a.path.localeCompare(b.path));
+  const shortlist = candidates.slice(0, 8);
+  const fetchedFiles = [];
+
+  for (const item of shortlist) {
     const encodedPath = item.path.split("/").map(encodeURIComponent).join("/");
     try {
       const file = await githubRequest(
-        `https://api.github.com/repos/${repo}/contents/${encodedPath}?ref=${encodedBranch}`,
+        "https://api.github.com/repos/" + repo + "/contents/" + encodedPath + "?ref=" + encodedBranch,
         { headers: auth }
       );
       if (file.type !== "file" || !file.content) continue;
-      const content = Buffer.from(file.content, file.encoding || "base64").toString("utf8");
-      if (content.length > remaining) continue;
-      files.push({ path: file.path, sha: file.sha, content });
-      remaining -= content.length;
+      const fileContent = Buffer.from(file.content, file.encoding || "base64").toString("utf8");
+      const lower = fileContent.toLowerCase();
+      let contentScore = 0;
+      for (const term of terms) {
+        if (lower.includes(term)) contentScore += Math.min(8, lower.split(term).length - 1);
+      }
+      fetchedFiles.push({
+        path: file.path,
+        sha: file.sha,
+        content: fileContent,
+        score: pathScore(item) + contentScore
+      });
     } catch (error) {
       console.warn("Skipping repository context file:", item.path, error.message);
     }
   }
+
+  fetchedFiles.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
+  let remaining = 5000;
+  const files = [];
+  for (const file of fetchedFiles) {
+    if (remaining < 500) break;
+    const compacted = compactRelevantFile(file.content, terms, Math.min(remaining, 3500));
+    if (!compacted.trim()) continue;
+    files.push({ path: file.path, sha: file.sha, content: compacted });
+    remaining -= compacted.length;
+    if (files.length >= 3) break;
+  }
+
   return { repo, branch: selected.default_branch, files };
 }
-
 
 app.post("/api/github/chat-edit", requireOwner, async (req, res) => {
   if (!API_KEY) return res.status(503).json({ error: "The AI provider is not configured." });
   const repo = String(req.body?.repo || "");
-  const incoming = Array.isArray(req.body?.messages) ? req.body.messages.slice(-6) : [];
+  const incoming = Array.isArray(req.body?.messages) ? limitConversationMessages(req.body.messages.slice(-6), 2200, 900) : [];
   const latest = incoming.filter(item => item?.role === "user").slice(-1)[0]?.content;
   if (!latest || typeof latest !== "string" || latest.length > 4000) {
     return res.status(400).json({ error: "Send a clear code-change request." });
@@ -579,7 +679,7 @@ app.post("/api/chat", async (req, res) => {
     return res.status(503).json({ error: "The server owner needs to configure GROQ_API_KEY." });
   }
 
-  const incoming = Array.isArray(req.body?.messages) ? req.body.messages.slice(-8) : req.body?.messages;
+  const incoming = Array.isArray(req.body?.messages) ? limitConversationMessages(req.body.messages.slice(-8), 3000, 1200) : req.body?.messages;
   if (!Array.isArray(incoming) || incoming.length === 0 || incoming.length > 20) {
     return res.status(400).json({ error: "Send between 1 and 20 chat messages." });
   }
