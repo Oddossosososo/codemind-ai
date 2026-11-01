@@ -523,7 +523,7 @@ function compactRelevantFile(content, terms, maxChars) {
   return output.join("").slice(0, maxChars);
 }
 
-async function readGithubRepositoryContext(repo, requestText) {
+async function readGithubRepositoryContext(repo, requestText, options = {}) {
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) ||
       repo.split("/")[0].toLowerCase() !== GITHUB_OWNER) {
     const error = new Error("Choose a repository owned by your connected GitHub account.");
@@ -608,7 +608,11 @@ async function readGithubRepositoryContext(repo, requestText) {
   const files = [];
   for (const file of fetchedFiles) {
     if (remaining < 500) break;
-    const compacted = compactRelevantFile(file.content, terms, Math.min(remaining, 3500));
+    // Edit proposals require complete source files; never send excerpts as replacement-file input.
+    if (options.preserveFullFiles && file.content.length > remaining) continue;
+    const compacted = options.preserveFullFiles
+      ? file.content
+      : compactRelevantFile(file.content, terms, Math.min(remaining, 3500));
     if (!compacted.trim()) continue;
     files.push({ path: file.path, sha: file.sha, content: compacted });
     remaining -= compacted.length;
@@ -627,7 +631,7 @@ app.post("/api/github/chat-edit", requireOwner, async (req, res) => {
     return res.status(400).json({ error: "Send a clear code-change request." });
   }
   try {
-    const context = await readGithubRepositoryContext(repo, latest);
+    const context = await readGithubRepositoryContext(repo, latest, { preserveFullFiles: true });
     if (!context.files.length) return res.status(400).json({ error: "No suitable source files were found in this repository." });
     const sourceList = context.files.map(file => ({ path: file.path, sha: file.sha, content: file.content }));
     const completion = await fetch("https://api.groq.com/openai/v1/chat/completions", {
