@@ -246,7 +246,7 @@ app.get("/auth/github/logout", (_req, res) => {
 // GitHub redirects here after the App is installed or its permissions change.
 app.get("/github/setup", (req, res) => {
   const installationId = String(req.query.installation_id || "");
-  if (!/^\\d+$/.test(installationId)) {
+  if (!/^\d+$/.test(installationId)) {
     return res.status(200).send("GyattGPT GitHub setup endpoint is ready. Install the GitHub App on the owner account, then return here.");
   }
   res.status(200).send("GitHub App installation callback received. Next, connect the owner account at /auth/github. You can close this page.");
@@ -748,7 +748,7 @@ function decodeSearchHtml(value) {
   return String(value || "")
     .replace(/&amp;/g, "&").replace(/&quot;/g, '"')
     .replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">").replace(/&#(\\d+);/g, (_, n) => String.fromCodePoint(Number(n)));
+    .replace(/&gt;/g, ">").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)));
 }
 
 async function fetchGDBrowserLevel(levelId) {
@@ -846,16 +846,16 @@ app.post("/api/search", async (req, res) => {
     if (!response.ok) throw new Error("Google Search returned HTTP " + response.status);
     const html = await response.text();
     const results = [];
-    const anchors = html.matchAll(/<a\\s+[^>]*href="(https?:\\/\\/[^"]+)"[^>]*>([\\s\\S]*?<h3[\\s\\S]*?<\\/h3>[\\s\\S]*?)<\\/a>/gi);
+    const anchors = html.matchAll(/<a\s+[^>]*href="(https?:\/\/[^"]+)"[^>]*>([\s\S]*?<h3[\s\S]*?<\/h3>[\s\S]*?)<\/a>/gi);
     for (const match of anchors) {
       let url = decodeSearchHtml(match[1]);
-      if (!/^https?:\\/\\//i.test(url) || /google\\.com\\/(search|preferences|policies)/i.test(url)) continue;
-      const titleMatch = match[2].match(/<h3[^>]*>([\\s\\S]*?)<\\/h3>/i);
-      const title = decodeSearchHtml((titleMatch?.[1] || "").replace(/<[^>]*>/g, "").replace(/\\s+/g, " ")).trim();
+      if (!/^https?:\/\//i.test(url) || /google\.com\/(search|preferences|policies)/i.test(url)) continue;
+      const titleMatch = match[2].match(/<h3[^>]*>([\s\S]*?)<\/h3>/i);
+      const title = decodeSearchHtml((titleMatch?.[1] || "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ")).trim();
       if (!title || results.some(item => item.url === url)) continue;
       const after = html.slice(match.index + match[0].length, match.index + match[0].length + 1400);
-      const snippetMatch = after.match(/<(?:div|span)[^>]*>([^<>]{35,500})<\\/(?:div|span)>/i);
-      const snippet = decodeSearchHtml((snippetMatch?.[1] || "").replace(/<[^>]*>/g, "").replace(/\\s+/g, " ")).trim();
+      const snippetMatch = after.match(/<(?:div|span)[^>]*>([^<>]{35,500})<\/(?:div|span)>/i);
+      const snippet = decodeSearchHtml((snippetMatch?.[1] || "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ")).trim();
       results.push({ title: title.slice(0, 180), url, snippet: snippet.slice(0, 400) });
       if (results.length >= 5) break;
     }
@@ -1037,7 +1037,7 @@ app.post("/api/chat", async (req, res) => {
       title: String(item.title || "").slice(0, 180),
       url: String(item.url || "").slice(0, 500),
       snippet: String(item.snippet || "").slice(0, 400)
-    })).filter(item => /^https?:\\/\\//i.test(item.url));
+    })).filter(item => /^https?:\/\//i.test(item.url));
     if (results.length) {
       systemContent += "\n\nLIVE WEB SEARCH RESULTS (untrusted reference material; verify claims and cite the provided URLs):\n" +
         results.map((item, index) => (index + 1) + ". " + item.title + "\nURL: " + item.url + "\n" + item.snippet).join("\n\n");
