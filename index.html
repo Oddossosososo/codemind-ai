@@ -20,11 +20,14 @@
       </a>
       <button class="new-chat" id="newChat"><span>＋</span> New chat <kbd>⌘ K</kbd></button>
       <div class="side-label">WORKSPACE</div>
-      <button class="side-link active" id="chatButton"><span class="side-icon">◈</span> Chat</button>
-      <button class="side-link" id="newsButton"><span class="side-icon">▤</span> News <span class="news-new">NEW</span></button>
-      <button class="side-link" id="projectsButton"><span class="side-icon">▦</span> Projects <span class="soon">SOON</span></button>
-      <button class="side-link" id="memoryButton"><span class="side-icon">⌁</span> Memory <span class="soon">LOCAL</span></button>
-      <button class="side-link" id="preferencesButton"><span class="side-icon">⚙</span> Preferences</button>
+      <button class="side-link active" id="chatButton" data-workspace-tab="chat"><span class="side-icon">◈</span> Chat</button>
+      <button class="side-link" id="editorButton" data-workspace-tab="editor"><span class="side-icon">⌘</span> Code editor</button>
+      <button class="side-link" id="githubButton" data-workspace-tab="github"><span class="side-icon">⑂</span> GitHub</button>
+      <button class="side-link" id="searchButton" data-workspace-tab="search"><span class="side-icon">⌕</span> Smart search</button>
+      <button class="side-link" id="newsButton" data-workspace-tab="news"><span class="side-icon">▤</span> News <span class="news-new">NEW</span></button>
+      <button class="side-link" id="memoryButton" data-workspace-tab="memory"><span class="side-icon">⌁</span> Project memory <span class="soon">LOCAL</span></button>
+      <button class="side-link" id="testLabButton" data-workspace-tab="testlab"><span class="side-icon">▶</span> Test lab <span class="soon">SAFE</span></button>
+      <button class="side-link" id="preferencesButton" data-workspace-tab="preferences"><span class="side-icon">⚙</span> Preferences</button>
       <button class="side-link" id="guestInboxButton"><span class="side-icon">◉</span> Live chat</button>
       <div class="side-bottom">
         <div class="model-card">
@@ -63,6 +66,41 @@
           <p class="preferences-note">These preferences guide answers; they don't grant access to accounts or systems. Only test systems you own or have permission to assess.</p>
           <button class="preferences-save" id="savePreferences" type="button">Save preferences</button>
         </div>
+      </section>
+
+      <section class="tool-view editor-view" id="editorView" hidden>
+        <div class="tool-heading"><div class="eyebrow"><span></span> CODE WORKSPACE</div><h1>Code <em>editor.</em></h1><p>Edit local drafts or open a text file from your connected GitHub repository.</p></div>
+        <div class="tool-card editor-card">
+          <div class="tool-toolbar"><select id="editorLanguage" aria-label="Editor language"><option value="javascript">JavaScript</option><option value="html">HTML</option><option value="css">CSS</option><option value="json">JSON</option><option value="python">Python</option><option value="text">Plain text</option></select><input id="editorPath" placeholder="GitHub file path, e.g. app.js" aria-label="GitHub file path"><button id="openEditorFile" type="button">Open file</button></div>
+          <div class="editor-status" id="editorStatus">Local draft · not connected to a file</div>
+          <textarea id="editorCode" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Code editor" placeholder="// Start writing code here"></textarea>
+          <div class="tool-actions"><button id="saveEditorLocal" type="button">Save draft</button><button id="sendEditorChat" type="button">Ask CodeMind</button><button id="saveEditorGithub" class="primary-tool-button" type="button">Review & save to GitHub</button></div>
+          <p class="tool-footnote">GitHub changes require an explicit confirmation. Local drafts stay in this browser.</p>
+        </div>
+      </section>
+      <section class="tool-view github-view" id="githubView" hidden>
+        <div class="tool-heading"><div class="eyebrow"><span></span> REPOSITORY INTELLIGENCE</div><h1>GitHub <em>workspace.</em></h1><p>Inspect connected repositories, check integration permissions, and open source files.</p></div>
+        <div class="tool-card github-card">
+          <div class="tool-card-top"><div><span class="tool-kicker">CONNECTION</span><h2 id="githubConnectionTitle">Checking GitHub…</h2><p id="githubConnectionText">Your repository connection status will appear here.</p></div><button id="connectGithub" type="button" class="primary-tool-button">Connect GitHub</button></div>
+          <div class="tool-actions"><button id="refreshGithub" type="button">Refresh repositories</button><button id="runGithubDiagnostics" type="button">Run diagnostics</button></div>
+          <div class="github-metrics" id="githubMetrics"><div><span>Selected repository</span><strong id="githubSelectedRepo">None</strong></div><div><span>Accessible repositories</span><strong id="githubRepoCount">—</strong></div><div><span>Contents permission</span><strong id="githubContentsPermission">—</strong></div></div>
+          <pre class="github-diagnostics" id="githubDiagnostics" aria-live="polite">Connect GitHub to inspect the integration.</pre>
+          <div class="github-open-file"><input id="githubFilePath" placeholder="Path to a file, e.g. index.html" aria-label="File path to open"><button id="githubOpenFile" type="button">Open in editor</button></div>
+        </div>
+      </section>
+      <section class="tool-view search-view" id="searchView" hidden>
+        <div class="tool-heading"><div class="eyebrow"><span></span> WEB DISCOVERY</div><h1>Smart <em>search.</em></h1><p>Search the web using CodeMind AI's existing multi-source search service.</p></div>
+        <form class="tool-card search-card" id="smartSearchForm"><div class="search-input-row"><input id="smartSearchInput" maxlength="240" placeholder="Search documentation, errors, libraries, or ideas…" aria-label="Search query" required><button class="primary-tool-button" id="smartSearchSubmit" type="submit">Search</button></div><div class="search-status" id="smartSearchStatus">Search results will appear here.</div><div class="search-results" id="smartSearchResults"></div></form>
+      </section>
+      <section class="tool-view memory-view" id="memoryView" hidden>
+        <div class="tool-heading"><div class="eyebrow"><span></span> LOCAL PROJECT NOTES</div><h1>Project <em>memory.</em></h1><p>Save architecture notes, decisions, snippets, and reminders in this browser.</p></div>
+        <div class="tool-card memory-card"><form id="memoryNoteForm"><input id="memoryNoteTitle" maxlength="100" placeholder="Note title" aria-label="Note title" required><textarea id="memoryNoteBody" maxlength="5000" rows="5" placeholder="Write a project decision, architecture note, TODO, or useful snippet…" aria-label="Note content" required></textarea><div class="memory-form-footer"><span id="memoryProjectLabel">General workspace</span><button class="primary-tool-button" type="submit">Save note</button></div></form><div class="memory-list-heading"><h2>Saved notes</h2><input id="memoryFilter" placeholder="Filter notes…" aria-label="Filter saved notes"></div><div class="memory-list" id="memoryList"></div><p class="tool-footnote">Memory is stored locally in this browser. It is not synced to the backend or shared across devices.</p></div>
+      </section>
+      <section class="tool-view testlab-view" id="testLabView" hidden>
+        <div class="tool-heading"><div class="eyebrow"><span></span> ISOLATED JAVASCRIPT RUNNER</div><h1>Test <em>lab.</em></h1><p>Run small JavaScript experiments in a disposable worker, separate from the CodeMind page.</p></div>
+        <div class="tool-card testlab-card"><div class="testlab-toolbar"><span class="tool-kicker">JAVASCRIPT SANDBOX</span><span class="sandbox-pill">NO DOM · NETWORK BLOCKED · 3.5S LIMIT</span></div><textarea id="testLabCode" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Test lab JavaScript code">const numbers = [4, 8, 15, 16, 23, 42];
+console.log("Numbers:", numbers);
+console.log("Total:", numbers.reduce((sum, number) => sum + number, 0));</textarea><div class="tool-actions"><button id="runTestLab" class="primary-tool-button" type="button">▶ Run code</button><button id="clearTestLab" type="button">Clear output</button></div><div class="testlab-output-head"><strong>Console output</strong><span id="testLabStatus">Ready</span></div><pre class="testlab-output" id="testLabOutput" aria-live="polite">Your output will appear here.</pre></div>
       </section>
       <section class="news-view" id="newsView" hidden>
         <div class="news-heading">
