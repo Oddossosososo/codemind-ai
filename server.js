@@ -762,17 +762,17 @@ app.post("/api/search", async (req, res) => {
     if (!response.ok) throw new Error("Search provider returned HTTP " + response.status);
     const html = await response.text();
     const results = [];
-    const blocks = html.match(/<div class="result[^>]*>[\\s\\S]*?<\\/div>\\s*<\\/div>/gi) || [];
+    const blocks = html.match(/<div class="result[^>]*>[\s\S]*?<\/div>\s*<\/div>/gi) || [];
     for (const block of blocks) {
-      const linkMatch = block.match(/<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\\s\\S]*?)<\\/a>/i);
+      const linkMatch = block.match(/<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
       if (!linkMatch) continue;
       let url = decodeSearchHtml(linkMatch[1]);
       const redirect = url.match(/[?&]uddg=([^&]+)/);
       if (redirect) { try { url = decodeURIComponent(redirect[1]); } catch {} }
-      if (!/^https?:\\/\\//i.test(url)) continue;
-      const title = decodeSearchHtml(linkMatch[2].replace(/<[^>]*>/g, "").replace(/\\s+/g, " ")).trim();
-      const snippetMatch = block.match(/class="result__snippet"[^>]*>([\\s\\S]*?)<\\/[^>]+>/i);
-      const snippet = decodeSearchHtml((snippetMatch?.[1] || "").replace(/<[^>]*>/g, "").replace(/\\s+/g, " ")).trim();
+      if (!/^https?:\/\//i.test(url)) continue;
+      const title = decodeSearchHtml(linkMatch[2].replace(/<[^>]*>/g, "").replace(/\s+/g, " ")).trim();
+      const snippetMatch = block.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/[^>]+>/i);
+      const snippet = decodeSearchHtml((snippetMatch?.[1] || "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ")).trim();
       if (title) results.push({ title: title.slice(0, 180), url, snippet: snippet.slice(0, 400) });
       if (results.length >= 5) break;
     }
