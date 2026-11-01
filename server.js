@@ -4,6 +4,7 @@ const path = require("path");
 const crypto = require("crypto");
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = Number(process.env.PORT) || 3000;
 const API_KEY = process.env.GROQ_API_KEY;
 const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
@@ -924,7 +925,7 @@ function imageUsageKey(req) {
 }
 
 function utcDayKey() {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Australia/Adelaide", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
 app.post("/api/images/generate", async (req, res) => {
