@@ -368,7 +368,7 @@ app.get("/api/github/file", requireOwner, async (req, res) => {
       return res.status(400).json({ error: "That path is not a readable file." });
     }
     const content = Buffer.from(file.content, file.encoding || "base64").toString("utf8");
-    res.json({ name: file.name, path: file.path, content: content.slice(0, 200000) });
+    res.json({ name: file.name, path: file.path, sha: file.sha, content: content.slice(0, 200000) });
   } catch (error) {
     res.status(error.status || 502).json({ error: error.message });
   }
