@@ -11,6 +11,7 @@ const activeRepoSelect = document.querySelector("#activeRepoSelect");
 const REPO_STORAGE_KEY = "codemind-selected-repo-v1";
 let activeGithubRepo = localStorage.getItem(REPO_STORAGE_KEY) || "";
 const sendButton = document.querySelector("#sendButton");
+const imageButton = document.querySelector("#imageButton");
 const toast = document.querySelector("#toast");
 const STORAGE_KEY = "codemind-chat-v1";
 const API_BASE_URL = "https://codemind-ai-l8ix.onrender.com";
@@ -105,7 +106,8 @@ function render() {
       <div class="message-avatar">${message.role === "user" ? "Y" : "G"}</div>
       <div class="message-content">
         <div class="message-role">${message.role === "user" ? "YOU" : "GYATTGPT"}</div>
-        <div class="message-text">${formatText(message.content)}</div>
+        <div class="message-text">${formatText(message.content || "")}</div>
+        ${message.imageUrl ? '<a class="message-image-link" href="' + escapeHTML(message.imageUrl) + '" target="_blank" rel="noopener noreferrer"><img class="message-image" src="' + escapeHTML(message.imageUrl) + '" alt="AI-generated image" loading="lazy"></a>' : ""}
       </div>
     </article>`).join("");
   linkifyMessageText(messagesEl);
@@ -282,6 +284,56 @@ async function sendMessage(text) {
     input.focus();
   }
 }
+async function generateImage(prompt) {
+  const content = String(prompt || "").trim();
+  if (!content || busy) {
+    if (!content) showToast("Describe the image you want first.");
+    return;
+  }
+  imageButton.disabled = true;
+  imageButton.textContent = "Generating…";
+  messages.push({ role: "user", content: "Generate an image: " + content });
+  saveMessages();
+  render();
+  const pending = document.createElement("article");
+  pending.className = "message";
+  pending.innerHTML = '<div class="message-avatar">G</div><div class="message-content"><div class="message-role">GYATTGPT</div><div class="message-text typing">Creating your image···</div></div>';
+  messagesEl.appendChild(pending);
+  try {
+    const response = await fetch(API_BASE_URL + "/api/images/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: content })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Image generation failed (HTTP " + response.status + ").");
+    if (typeof data.imageUrl !== "string" || !/^https:\/\//i.test(data.imageUrl)) {
+      throw new Error("The image provider returned no usable image URL.");
+    }
+    messages.push({ role: "assistant", content: "Here's your generated image.", imageUrl: data.imageUrl });
+    saveMessages();
+  } catch (error) {
+    messages.push({ role: "assistant", content: "Image generation failed: " + error.message });
+    saveMessages();
+  } finally {
+    imageButton.disabled = false;
+    imageButton.textContent = "✧ Imagine";
+    render();
+    input.focus();
+  }
+}
+imageButton.addEventListener("click", () => {
+  const prompt = input.value.trim();
+  if (!prompt) {
+    input.placeholder = "Describe the image you want, then click Imagine…";
+    input.focus();
+    showToast("Add an image prompt in the message box.");
+    return;
+  }
+  input.value = "";
+  resizeInput();
+  generateImage(prompt);
+});
 function resizeInput() {
   input.style.height = "auto";
   input.style.height = Math.min(input.scrollHeight, 180) + "px";
