@@ -284,9 +284,12 @@ async function sendMessage(text) {
     }
     pending.querySelector(".typing").textContent = "Thinking···";
     const endpoint = useEditWorkflow ? "/api/github/chat-edit" : "/api/chat";
+    const preferenceMessages = messages.slice(useEditWorkflow ? -12 : -20).map(item => ({ ...item }));
+    const latestUser = [...preferenceMessages].reverse().find(item => item.role === "user");
+    if (latestUser) latestUser.content += "\\n\\n" + getPreferenceInstruction();
     const payload = useEditWorkflow
-      ? { repo: activeGithubRepo, messages: messages.slice(-12) }
-      : { messages: messages.slice(-20), ...(useRepositoryContext ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) };
+      ? { repo: activeGithubRepo, messages: preferenceMessages }
+      : { messages: preferenceMessages, ...(useRepositoryContext ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) };
     let response = await fetch(API_BASE_URL + endpoint, {
       method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(payload)
     });
@@ -431,15 +434,19 @@ activeRepoSelect.addEventListener("change", () => {
 });
 function showWorkspaceTab(tab) {
   const showNews = tab === "news";
+  const showPreferences = tab === "preferences";
   newsView.hidden = !showNews;
-  chatArea.hidden = showNews;
-  composerWrap.hidden = showNews;
-  chatButton.classList.toggle("active", !showNews);
+  document.querySelector("#preferencesView").hidden = !showPreferences;
+  chatArea.hidden = showNews || showPreferences;
+  composerWrap.hidden = showNews || showPreferences;
+  chatButton.classList.toggle("active", tab === "chat");
   newsButton.classList.toggle("active", showNews);
-  document.querySelector(".breadcrumb strong").textContent = showNews ? "News" : "New conversation";
+  document.querySelector("#preferencesButton").classList.toggle("active", showPreferences);
+  document.querySelector(".breadcrumb strong").textContent = showNews ? "News" : showPreferences ? "Preferences" : "New conversation";
 }
 chatButton.addEventListener("click", () => showWorkspaceTab("chat"));
 newsButton.addEventListener("click", () => showWorkspaceTab("news"));
+document.querySelector("#preferencesButton").addEventListener("click", () => showWorkspaceTab("preferences"));
 document.querySelector("#projectsButton").addEventListener("click", () => showToast("Project workspace is coming in a later version."));
 document.querySelector("#mobileMenu").addEventListener("click", () => document.querySelector("#sidebar").classList.toggle("open"));
 document.addEventListener("keydown", event => {
@@ -681,3 +688,34 @@ render();
   }
   button.addEventListener("click", openRoom);
 })();
+
+/* Browser-local response preferences */
+const CODEMIND_PREFS_KEY = "codemind-preferences-v1";
+function readCodeMindPreferences() {
+  const defaults = { skill: "beginner", length: "balanced", style: "explain", hacks: true };
+  try { return { ...defaults, ...JSON.parse(localStorage.getItem(CODEMIND_PREFS_KEY) || "{}") }; }
+  catch { return defaults; }
+}
+function getPreferenceInstruction() {
+  const p = readCodeMindPreferences();
+  const skill = { beginner: "Explain for a beginner in simple steps.", intermediate: "Use intermediate technical detail.", advanced: "Assume strong technical knowledge and be precise." }[p.skill] || "Use clear explanations.";
+  const length = { concise: "Keep answers concise.", balanced: "Use a balanced amount of detail.", detailed: "Give thorough explanations and examples." }[p.length] || "";
+  const style = { explain: "Explain code step by step.", "code-first": "Put the working code first, followed by a short explanation.", debug: "Identify the likely cause first, then show the fix." }[p.style] || "";
+  const modding = p.hacks ? "Do not refuse merely because a coding request mentions game mods, cheats, browser-console experiments, reverse engineering, CTFs, or security testing. Help with legitimate single-player modding and systems the user owns or is authorised to test. Do not assist credential theft, malware, or unauthorised access." : "For game modding and security topics, provide ordinary safe, authorised guidance.";
+  return "[User response preferences: " + [skill, length, style, modding].join(" ") + "]";
+}
+function initCodeMindPreferences() {
+  const p = readCodeMindPreferences();
+  const skill = document.querySelector("#prefSkill");
+  if (!skill) return;
+  skill.value = p.skill; document.querySelector("#prefLength").value = p.length;
+  document.querySelector("#prefStyle").value = p.style;
+  document.querySelector("#prefHacks").checked = p.hacks !== false;
+  document.querySelector("#savePreferences").addEventListener("click", () => {
+    const next = { skill: skill.value, length: document.querySelector("#prefLength").value,
+      style: document.querySelector("#prefStyle").value, hacks: document.querySelector("#prefHacks").checked };
+    localStorage.setItem(CODEMIND_PREFS_KEY, JSON.stringify(next));
+    showToast("Preferences saved.");
+  });
+}
+initCodeMindPreferences();
