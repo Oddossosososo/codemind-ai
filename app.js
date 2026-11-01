@@ -213,7 +213,7 @@ function buildResearchSearchPlan(text, context = "") {
   if (science) {
     return {
       type: "science",
-      query: queryBase + " (site:nih.gov OR site:ncbi.nlm.nih.gov OR site:nature.com OR site:science.org OR site:nasa.gov OR site:noaa.gov OR site:usgs.gov)"
+      query: queryBase + " (site:khanacademy.org OR site:nih.gov OR site:ncbi.nlm.nih.gov OR site:nature.com OR site:science.org OR site:nasa.gov OR site:noaa.gov OR site:usgs.gov)"
     };
   }
   if (asksForLinks) return { type: "links", query: queryBase };
