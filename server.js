@@ -748,38 +748,40 @@ function decodeSearchHtml(value) {
   return String(value || "")
     .replace(/&amp;/g, "&").replace(/&quot;/g, '"')
     .replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)));
+    .replace(/&gt;/g, ">").replace(/&#(\\d+);/g, (_, n) => String.fromCodePoint(Number(n)));
 }
 
 app.post("/api/search", async (req, res) => {
   const query = String(req.body?.query || "").trim().slice(0, 240);
   if (!query) return res.status(400).json({ error: "Enter something to search for." });
   try {
-    const response = await fetch("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query), {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; CodeMindAI/1.0)" },
+    const response = await fetch("https://www.google.com/search?udm=14&q=" + encodeURIComponent(query), {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept-Language": "en-AU,en;q=0.9"
+      },
       signal: AbortSignal.timeout(12000)
     });
-    if (!response.ok) throw new Error("Search provider returned HTTP " + response.status);
+    if (!response.ok) throw new Error("Google Search returned HTTP " + response.status);
     const html = await response.text();
     const results = [];
-    const blocks = html.match(/<div class="result[^>]*>[\s\S]*?<\/div>\s*<\/div>/gi) || [];
-    for (const block of blocks) {
-      const linkMatch = block.match(/<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
-      if (!linkMatch) continue;
-      let url = decodeSearchHtml(linkMatch[1]);
-      const redirect = url.match(/[?&]uddg=([^&]+)/);
-      if (redirect) { try { url = decodeURIComponent(redirect[1]); } catch {} }
-      if (!/^https?:\/\//i.test(url)) continue;
-      const title = decodeSearchHtml(linkMatch[2].replace(/<[^>]*>/g, "").replace(/\s+/g, " ")).trim();
-      const snippetMatch = block.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/[^>]+>/i);
-      const snippet = decodeSearchHtml((snippetMatch?.[1] || "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ")).trim();
-      if (title) results.push({ title: title.slice(0, 180), url, snippet: snippet.slice(0, 400) });
+    const anchors = html.matchAll(/<a\\s+[^>]*href="(https?:\\/\\/[^"]+)"[^>]*>([\\s\\S]*?<h3[\\s\\S]*?<\\/h3>[\\s\\S]*?)<\\/a>/gi);
+    for (const match of anchors) {
+      let url = decodeSearchHtml(match[1]);
+      if (!/^https?:\\/\\//i.test(url) || /google\\.com\\/(search|preferences|policies)/i.test(url)) continue;
+      const titleMatch = match[2].match(/<h3[^>]*>([\\s\\S]*?)<\\/h3>/i);
+      const title = decodeSearchHtml((titleMatch?.[1] || "").replace(/<[^>]*>/g, "").replace(/\\s+/g, " ")).trim();
+      if (!title || results.some(item => item.url === url)) continue;
+      const after = html.slice(match.index + match[0].length, match.index + match[0].length + 1400);
+      const snippetMatch = after.match(/<(?:div|span)[^>]*>([^<>]{35,500})<\\/(?:div|span)>/i);
+      const snippet = decodeSearchHtml((snippetMatch?.[1] || "").replace(/<[^>]*>/g, "").replace(/\\s+/g, " ")).trim();
+      results.push({ title: title.slice(0, 180), url, snippet: snippet.slice(0, 400) });
       if (results.length >= 5) break;
     }
-    res.json({ query, results });
+    res.json({ query, provider: "Google", results });
   } catch (error) {
-    console.error("Web search failed:", error.message);
-    res.status(502).json({ error: "Web search is temporarily unavailable. Try again shortly." });
+    console.error("Google Search failed:", error.message);
+    res.status(502).json({ error: "Google Search is temporarily unavailable. Try again shortly." });
   }
 });
 
