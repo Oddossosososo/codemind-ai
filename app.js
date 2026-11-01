@@ -168,11 +168,23 @@ async function sendMessage(text) {
     const useEditWorkflow = Boolean(activeGithubRepo && asksForEdit);
     const endpoint = useEditWorkflow ? "/api/github/chat-edit" : "/api/chat";
     const payload = useEditWorkflow ? { repo: activeGithubRepo, messages: messages.slice(-12) } : { messages: messages.slice(-20), githubRepo: activeGithubRepo };
-    const response = await fetch(API_BASE_URL + endpoint, {
+    let response = await fetch(API_BASE_URL + endpoint, {
       method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(payload)
     });
-    const data = await response.json().catch(() => ({}));
+    // Older Render deployments may not yet expose the structured edit route.
+    // Fall back to repository-aware chat so the user can still get code help.
+    let data = await response.json().catch(() => ({}));
+    let editRouteFallback = false;
+    if (useEditWorkflow && response.status === 404) {
+      response = await fetch(API_BASE_URL + "/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+        body: JSON.stringify({ messages: messages.slice(-20), githubRepo: activeGithubRepo })
+      });
+      data = await response.json().catch(() => ({}));
+      editRouteFallback = response.ok;
+    }
     if (!response.ok) throw new Error(data.error || `Backend request failed (HTTP ${response.status}) at ${endpoint}. Check the Render service and its logs.`);
+    if (editRouteFallback) data.reply = "The structured GitHub edit service is not deployed yet, so I used repository-aware chat as a fallback. I can still inspect the repository and draft the changes, but the approve-and-commit panel is unavailable until the backend is redeployed.\n\n" + data.reply;
     if (typeof data.reply !== "string" || !data.reply.trim()) throw new Error("The model returned an empty response.");
     messages.push({ role: "assistant", content: data.reply.trim() }); saveMessages();
     chatEditResult = useEditWorkflow && data.edits?.length ? data.edits : null;
