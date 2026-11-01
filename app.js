@@ -618,7 +618,7 @@ function readProjectMemory() {
 function getProjectMemoryContext() {
   const notes = readProjectMemory().filter(item => {
     const scope = item.repo || "General workspace";
-    return scope === "General workspace" || !activeGithubRepo || scope === activeGithubRepo;
+    return scope === "General workspace" || (Boolean(activeGithubRepo) && scope === activeGithubRepo);
   }).slice(0, 8);
   return notes.map(item => "[" + (item.repo || "General workspace") + "] " + item.title + "\n" + item.body).join("\n\n").slice(0, 8000);
 }
