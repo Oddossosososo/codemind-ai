@@ -480,7 +480,7 @@ async function readGithubRepositoryContext(repo, requestText) {
   const terms = String(requestText || "").toLowerCase().match(/[a-z0-9_.-]{2,}/g) || [];
   const ignored = /(^|\/)(node_modules|\.git|dist|build|coverage|vendor)(\/|$)|\.(png|jpe?g|gif|webp|ico|woff2?|ttf|mp4|pdf|zip)$/i;
   const candidates = (tree.tree || []).filter(item =>
-    item.type === "blob" && item.size <= 30000 && !ignored.test(item.path) &&
+    item.type === "blob" && item.size <= 35000 && !ignored.test(item.path) &&
     /\.(js|mjs|cjs|ts|tsx|jsx|html|css|json|md|txt|yml|yaml|py|php|sql)$/i.test(item.path)
   );
   function score(item) {
