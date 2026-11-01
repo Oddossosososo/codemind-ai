@@ -137,6 +137,7 @@ async function sendMessage(text) {
   pending.className = "message";
   pending.innerHTML = '<div class="message-avatar">C</div><div class="message-content"><div class="message-role">CODEMIND</div><div class="message-text typing">Thinking···</div></div>';
   messagesEl.appendChild(pending);
+  let chatEditResult = null;
   try {
     const asksForEdit = /\\b(fix|change|edit|update|add|remove|implement|build|create|rewrite|refactor|modify|repair)\\b/i.test(content);
     const useEditWorkflow = Boolean(activeGithubRepo && asksForEdit);
@@ -155,14 +156,14 @@ async function sendMessage(text) {
     if (typeof data.reply !== "string" || !data.reply.trim()) throw new Error("The model returned an empty response.");
     messages.push({ role: "assistant", content: data.reply.trim() });
     saveMessages();
-    render();
-    if (useEditWorkflow && data.edits?.length) renderChatEditProposals(data.edits, activeGithubRepo);
+    chatEditResult = useEditWorkflow && data.edits?.length ? data.edits : null;
   } catch (error) {
     messages.push({ role: "assistant", content: "I couldn't connect: " + error.message + "\n\nCheck that the CodeMind backend is deployed and GROQ_API_KEY is configured." });
     saveMessages();
   } finally {
     setBusy(false);
     render();
+    if (chatEditResult) renderChatEditProposals(chatEditResult, activeGithubRepo);
     input.focus();
   }
 }
