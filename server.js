@@ -915,6 +915,58 @@ app.post("/api/search", async (req, res) => {
   res.json({ query, provider: "Google/DuckDuckGo", results });
 });
 
+app.post("/api/images/generate", async (req, res) => {
+  const imageKey = process.env.POLLINATIONS_API_KEY;
+  if (!imageKey) {
+    return res.status(503).json({
+      error: "Image generation isn't configured yet. Add POLLINATIONS_API_KEY to the Render environment."
+    });
+  }
+
+  const prompt = typeof req.body?.prompt === "string" ? req.body.prompt.trim() : "";
+  if (!prompt || prompt.length < 3) {
+    return res.status(400).json({ error: "Enter an image description of at least 3 characters." });
+  }
+  if (prompt.length > 1200) {
+    return res.status(400).json({ error: "Image prompts must be 1,200 characters or fewer." });
+  }
+
+  try {
+    const upstream = await fetch("https://gen.pollinations.ai/v1/images/generations", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + imageKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "black-forest-labs/flux.1-schnell",
+        prompt,
+        n: 1,
+        size: "1024x1024",
+        response_format: "url"
+      }),
+      signal: AbortSignal.timeout(120000)
+    });
+    const result = await upstream.json().catch(() => ({}));
+    if (!upstream.ok) {
+      console.error("Image provider error:", upstream.status, result?.error?.message || result?.error || "Unknown error");
+      return res.status(upstream.status === 429 ? 429 : 502).json({
+        error: upstream.status === 429
+          ? "The image provider is busy or the generation budget is exhausted. Try again later."
+          : "The image provider couldn't generate that image. Check the image API key, balance, and model permissions."
+      });
+    }
+    const imageUrl = result?.data?.[0]?.url;
+    if (typeof imageUrl !== "string" || !/^https:\/\//i.test(imageUrl)) {
+      return res.status(502).json({ error: "The image provider returned no image URL." });
+    }
+    res.json({ imageUrl, model: "black-forest-labs/flux.1-schnell" });
+  } catch (error) {
+    console.error("Image generation request failed:", error.message);
+    res.status(502).json({ error: "Couldn't reach the image provider. Try again shortly." });
+  }
+});
+
 app.post("/api/chat", async (req, res) => {
   if (!API_KEY) {
     return res.status(503).json({ error: "The server owner needs to configure GROQ_API_KEY." });
