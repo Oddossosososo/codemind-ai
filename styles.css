@@ -82,3 +82,22 @@
 .live-room-composer button{min-width:76px;border:0;border-radius:9px;background:var(--accent);color:#171222;font-weight:800;cursor:pointer}
 .live-room-composer button:disabled{opacity:.5;cursor:wait}
 @media(max-width:560px){.live-room-overlay{padding:0}.live-room-panel{width:100%;height:100%;max-height:none;border-radius:0}.live-room-notice{margin:10px 12px}.live-room-messages{padding:10px 12px}}
+
+
+/* Preferences workspace */
+.preferences-view{width:min(760px,calc(100% - 48px));margin:0 auto;flex:1;padding:62px 0 40px;animation:rise .3s ease both}
+.preferences-view[hidden]{display:none}
+.preferences-heading h1{font-size:clamp(42px,6vw,62px);letter-spacing:-3px;line-height:1;margin:0;font-weight:800}
+.preferences-heading h1 em{font-style:normal;color:var(--accent)}
+.preferences-heading p{font-size:12px;color:var(--muted);margin:15px 0 28px}
+.preferences-card{max-width:650px;padding:24px;border:1px solid #30364a;border-radius:14px;background:#111521;display:flex;flex-direction:column;gap:9px}
+.preferences-card>label{margin-top:8px;font-size:11px;font-weight:700;color:#cbd2e2}
+.preferences-card>select{width:100%;height:42px;padding:0 12px;border:1px solid #34394d;border-radius:8px;background:#090d16;color:var(--text);font:11px var(--sans)}
+.preferences-toggle{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-top:16px;padding:15px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.preferences-toggle strong{font-size:12px;color:#e5e8f2}
+.preferences-toggle p{font-size:10px;line-height:1.6;color:var(--muted);margin:5px 0 0}
+.preferences-toggle input{width:19px;height:19px;accent-color:var(--accent);flex:none}
+.preferences-note{font-size:10px;line-height:1.7;color:#8993a8;margin:2px 0}
+.preferences-save{height:42px;margin-top:8px;border:0;border-radius:8px;background:var(--accent);color:#171222;font:700 11px var(--sans);cursor:pointer}
+.preferences-save:hover{filter:brightness(1.08)}
+@media(max-width:600px){.preferences-view{width:calc(100% - 32px);padding-top:35px}.preferences-card{padding:18px}}
