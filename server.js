@@ -827,27 +827,35 @@ async function fetchGDBrowserLevelSearch(query) {
   const cleanQuery = String(query || "").trim().slice(0, 100);
   if (!cleanQuery) return [];
 
-  // Primary source: GDBrowser's own search API.
-  try {
-    const response = await fetch("https://gdbrowser.com/api/search/" + encodeURIComponent(cleanQuery), {
-      headers: { "User-Agent": "GyattGPT-AI/1.0", "Accept": "application/json" },
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!response.ok) throw new Error("HTTP " + response.status);
-    const payload = await response.json();
-    const items = Array.isArray(payload) ? payload :
-      (Array.isArray(payload?.levels) ? payload.levels :
-      (Array.isArray(payload?.results) ? payload.results : []));
-    const results = items.map(item => {
-      const id = String(item?.id || "");
-      if (!/^\d{1,12}$/.test(id) || !item?.name) return null;
-      return { name: String(item.name), id, author: String(item.author || item.creator || "Unknown"), searchSource: "GDBrowser" };
-    }).filter(Boolean);
-    if (results.length) return results;
-    console.warn("GDBrowser search returned no results; trying fallbacks.");
-  } catch (error) {
-    console.warn("GDBrowser search unavailable:", error.message);
+  // Primary source: GDBrowser's query-parameter search API.
+  // Keep the path-style endpoint as a compatibility fallback.
+  for (const searchUrl of [
+    "https://gdbrowser.com/api/search?query=" + encodeURIComponent(cleanQuery),
+    "https://gdbrowser.com/api/search/" + encodeURIComponent(cleanQuery)
+  ]) {
+    try {
+      const response = await fetch(searchUrl, {
+        headers: { "User-Agent": "GyattGPT-AI/1.0", "Accept": "application/json" },
+        signal: AbortSignal.timeout(15000)
+      });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      const payload = await response.json();
+      const items = Array.isArray(payload) ? payload :
+        (Array.isArray(payload?.levels) ? payload.levels :
+        (Array.isArray(payload?.results) ? payload.results : []));
+      const results = items.map(item => {
+        const id = String(item?.id ?? item?.levelID ?? "");
+        const name = item?.name ?? item?.title ?? item?.level_name;
+        const author = item?.author ?? item?.creator ?? item?.username ?? "Unknown";
+        if (!/^\\d{1,12}$/.test(id) || !name) return null;
+        return { name: String(name), id, author: String(author), searchSource: "GDBrowser" };
+      }).filter(Boolean);
+      if (results.length) return results;
+    } catch (error) {
+      console.warn("GDBrowser search endpoint failed:", searchUrl, error.message);
+    }
   }
+  console.warn("GDBrowser search returned no results; trying fallbacks.");
 
   // Fallback 1: official Geometry Dash search.
   try {
@@ -973,7 +981,8 @@ app.post("/api/chat", async (req, res) => {
     }
   }
   const conversationText = allowed.map(item => item.content).join("\n");
-  const latestUserMessage = allowed.filter(item => item.role === "user").slice(-1)[0]?.content || "";
+  const userMessages = allowed.filter(item => item.role === "user").map(item => item.content);
+  const latestUserMessage = userMessages.slice(-1)[0] || "";
   const mentionsGeometryDash = /geometry\s*dash|\bGD\b|gdbrowser/i.test(conversationText);
   const explicitLevelId = conversationText.match(/(?:level\s*(?:id)?\s*[:#]?\s*|\bid\s*[:#]\s*)(\d{1,12})/i);
   const gdIdFromContext = mentionsGeometryDash
@@ -994,16 +1003,22 @@ app.post("/api/chat", async (req, res) => {
       systemContent += "\n\nGD BROWSER LEVEL LOOKUP: The live lookup for ID " + gdLevelId + " failed. Be transparent and do not invent level details.";
     }
   } else {
-    const asksForLevelId = /\bwhat\s+id\s+is\b|\bwhat(?:'s|\s+is)\s+(?:the\s+)?(?:level\s+)?id\s+(?:in|of|for)\b|\b(?:level\s+)?id\s+(?:of|for)\b|\b(?:find|look\s+for|look\s+up|search(?:\s+for)?)\s+(?:the\s+)?(?:GD\s+)?level\s+/i.test(latestUserMessage);
-    const creatorMatch = latestUserMessage.match(/\bby\s+([A-Za-z0-9_-]{2,32})\s*[?.!]*$/i);
+    // Follow-up messages such as "send the ID" inherit the previous level request.
+    const levelRequestText = [...userMessages].reverse().find(message =>
+      /\\bby\\s+[A-Za-z0-9_-]{2,32}\\b/i.test(message) ||
+      /\\b(?:find|look\\s+for|look\\s+up|search|what\\s+id|level\\s+id)\\b/i.test(message)
+    ) || latestUserMessage;
+    const asksForLevelId = /\\bwhat\\s+id\\s+is\\b|\\bwhat(?:'s|\\s+is)\\s+(?:the\\s+)?(?:level\\s+)?id\\s+(?:in|of|for)\\b|\\b(?:level\\s+)?id\\s+(?:of|for)\\b|\\b(?:find|look\\s+for|look\\s+up|search(?:\\s+for)?)\\s+(?:the\\s+)?(?:GD\\s+)?level\\s+/i.test(levelRequestText);
+    const creatorMatch = levelRequestText.match(/\\bby\\s+([A-Za-z0-9_-]{2,32})\\s*[?.!]*$/i);
     const requestedCreator = creatorMatch?.[1] || null;
     const searchText = requestedCreator
-      ? latestUserMessage.slice(0, creatorMatch.index).trim()
-      : latestUserMessage;
-    const nameQuestion = searchText.match(/\bwhat\s+id\s+is\s+(.+?)\s*$/i)
-      || searchText.match(/\bwhat(?:'s|\s+is)\s+(?:the\s+)?(?:level\s+)?id\s+(?:in|of|for)\s+(.+?)\s*$/i)
-      || searchText.match(/\b(?:level\s+)?id\s+(?:of|for)\s+(.+?)\s*$/i)
-      || searchText.match(/\b(?:find|look\s+for|look\s+up|search(?:\s+for)?)\s+(?:the\s+)?(?:GD\s+)?(?:level\s+)?(.+?)\s*$/i);
+      ? levelRequestText.slice(0, creatorMatch.index).trim()
+      : levelRequestText;
+    const nameQuestion = searchText.match(/\\bwhat\\s+id\\s+is\\s+(.+?)\\s*$/i)
+      || searchText.match(/\\bwhat(?:'s|\\s+is)\\s+(?:the\\s+)?(?:level\\s+)?id\\s+(?:in|of|for)\\s+(.+?)\\s*$/i)
+      || searchText.match(/\\b(?:level\\s+)?id\\s+(?:of|for)\\s+(.+?)\\s*$/i)
+      || searchText.match(/\\b(?:find|look\\s+for|look\\s+up|search(?:\\s+for)?)\\s+(?:the\\s+)?(?:GD\\s+)?(?:level\\s+)?(.+?)\\s*$/i)
+      || (requestedCreator ? [searchText, searchText] : null);
     const levelName = nameQuestion?.[1]
       ?.replace(/\b(?:in geometry dash|in gd|on geometry dash)\s*$/i, "")
       .replace(/^the\s+/i, "")
