@@ -202,7 +202,13 @@ function extractImagePrompt(text) {
   const hasImageAction = /\b(?:make|create|draw|illustrate|generate|render)\b/i.test(raw);
   const explicitImageRequest = /\b(?:draw|illustrate)\b/i.test(raw) ||
     /\b(?:make|create|generate|render)\s+(?:me\s+)?(?:an?\s+)?(?:image|picture|photo|illustration|artwork)\b/i.test(raw);
-  if (!(explicitImageRequest || (hasNanoBanana && hasImageAction))) return "";
+  // Also recognize a standalone visual description when the user pastes an image
+  // prompt and presses Send instead of the Imagine button.
+  const standaloneVisualPrompt = /^(?:a|an|the)\b/i.test(raw) &&
+    raw.length >= 25 &&
+    /\b(?:3d|cartoon|illustration|illustrated|photorealistic|cinematic|lighting|wearing|standing|sitting|landscape|city|background|neon|sunglasses|portrait|character|logo|poster|render|watercolor|pixel art|anime)\b/i.test(raw) &&
+    /[,;]|\b(?:with|wearing|standing|sitting|in|under|beside)\b/i.test(raw);
+  if (!(explicitImageRequest || standaloneVisualPrompt || (hasNanoBanana && hasImageAction))) return "";
 
   return raw
     .replace(/^\s*(?:please\s+)?(?:can you\s+)?(?:make|create|draw|illustrate|generate|render)\s+(?:me\s+)?/i, "")
