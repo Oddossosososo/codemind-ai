@@ -252,6 +252,65 @@ app.get("/github/setup", (req, res) => {
   res.status(200).send("GitHub App installation callback received. Next, connect the owner account at /auth/github. You can close this page.");
 });
 
+app.get("/api/github/diagnostics", requireOwner, async (req, res) => {
+  try {
+    const jwt = createAppJwt();
+    const installations = await githubRequest("https://api.github.com/app/installations", {
+      headers: { Authorization: "Bearer " + jwt }
+    });
+    const installation = installations.find(item =>
+      item.account?.login?.toLowerCase() === GITHUB_OWNER
+    );
+    if (!installation) {
+      return res.status(404).json({
+        ok: false,
+        problem: "The backend App ID has no installation on the configured owner account.",
+        configuredOwner: GITHUB_OWNER
+      });
+    }
+    const tokenData = await githubRequest(
+      "https://api.github.com/app/installations/" + installation.id + "/access_tokens",
+      {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + jwt,
+          "Content-Type": "application/json"
+        },
+        body: "{}"
+      }
+    );
+    const repo = String(req.query.repo || "");
+    let repositoryAccessible = null;
+    if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) {
+      const installed = await githubRequest(
+        "https://api.github.com/installation/repositories?per_page=100",
+        { headers: { Authorization: "Bearer " + tokenData.token } }
+      );
+      repositoryAccessible = (installed.repositories || []).some(item =>
+        item.full_name.toLowerCase() === repo.toLowerCase()
+      );
+    }
+    res.json({
+      ok: true,
+      appSlug: installation.app_slug || null,
+      appId: installation.app_id || null,
+      installationId: installation.id,
+      account: installation.account?.login || null,
+      repositorySelection: installation.repository_selection || null,
+      installationPermissions: installation.permissions || {},
+      tokenPermissions: tokenData.permissions || {},
+      repositoryChecked: repo || null,
+      repositoryAccessible
+    });
+  } catch (error) {
+    res.status(error.status || 502).json({
+      ok: false,
+      problem: error.message,
+      status: error.status || null
+    });
+  }
+});
+
 app.get("/api/github/status", requireOwner, async (_req, res) => {
   try {
     const token = await getOwnerInstallationToken();
