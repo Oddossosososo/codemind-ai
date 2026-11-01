@@ -1057,10 +1057,10 @@ app.post("/api/chat", async (req, res) => {
   const gdLevelId = explicitLevelId?.[1] || gdIdFromContext?.[1];
   if (mentionsGeometryDash && !gdLevelId) {
     const text = latestUserMessage;
-    const dailyWeekly = text.match(/\\b(daily|weekly)\\b/i);
-    const profileMatch = text.match(/\\b(?:profile|stats|statistics|player)\\s+(?:of\\s+)?([A-Za-z0-9_-]{2,32})\\b/i)
-      || text.match(/\\b(?:user|player)\\s+([A-Za-z0-9_-]{2,32})\\s+(?:profile|stats)\\b/i);
-    const asksLeaderboard = /\\b(leaderboard|top players|top creators|global rankings)\\b/i.test(text);
+    const dailyWeekly = text.match(/\b(daily|weekly)\b/i);
+    const profileMatch = text.match(/\b(?:profile|stats|statistics|player)\s+(?:of\s+)?([A-Za-z0-9_-]{2,32})\b/i)
+      || text.match(/\b(?:user|player)\s+([A-Za-z0-9_-]{2,32})\s+(?:profile|stats)\b/i);
+    const asksLeaderboard = /\b(leaderboard|top players|top creators|global rankings)\b/i.test(text);
     const asksGDLive = dailyWeekly || profileMatch || asksLeaderboard;
 
     if (asksGDLive) {
@@ -1083,14 +1083,14 @@ app.post("/api/chat", async (req, res) => {
           label = "Live Geometry Dash global leaderboard (top 10)";
           sourceUrl = "https://gdbrowser.com/leaderboard";
         }
-        systemContent += "\\n\\nLIVE GEOMETRY DASH DATA — " + label +
-          "\\nRetrieved: " + new Date().toISOString() +
-          "\\nSource: " + sourceUrl +
-          "\\nUse this retrieved data as factual context. State when a field is missing; never invent stats or rankings.\\n" +
+        systemContent += "\n\nLIVE GEOMETRY DASH DATA — " + label +
+          "\nRetrieved: " + new Date().toISOString() +
+          "\nSource: " + sourceUrl +
+          "\nUse this retrieved data as factual context. State when a field is missing; never invent stats or rankings.\n" +
           JSON.stringify(data).slice(0, 18000);
       } catch (error) {
         console.warn("Live Geometry Dash data lookup failed:", error.message);
-        systemContent += "\\n\\nLIVE GEOMETRY DASH DATA: The requested live lookup failed (" +
+        systemContent += "\n\nLIVE GEOMETRY DASH DATA: The requested live lookup failed (" +
           error.message + "). Be transparent and do not invent current player stats, daily/weekly levels, or rankings.";
       }
     }
