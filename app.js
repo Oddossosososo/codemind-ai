@@ -286,7 +286,7 @@ async function sendMessage(text) {
     const endpoint = useEditWorkflow ? "/api/github/chat-edit" : "/api/chat";
     const preferenceMessages = messages.slice(useEditWorkflow ? -12 : -20).map(item => ({ ...item }));
     const latestUser = [...preferenceMessages].reverse().find(item => item.role === "user");
-    if (latestUser) latestUser.content += "\\n\\n" + getPreferenceInstruction();
+    if (latestUser) latestUser.content += "\n\n" + getPreferenceInstruction();
     const payload = useEditWorkflow
       ? { repo: activeGithubRepo, messages: preferenceMessages }
       : { messages: preferenceMessages, ...(useRepositoryContext ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) };
