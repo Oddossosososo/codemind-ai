@@ -847,78 +847,131 @@ async function fetchGDBrowserLevelSearch(query) {
 }
 const webSearchCache = new Map();
 
+function decodeSearchText(value) {
+  return String(value || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;|&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanSearchUrl(raw) {
+  let value = String(raw || "").replace(/&amp;/g, "&").trim();
+  if (value.startsWith("//")) value = "https:" + value;
+  try {
+    const parsed = new URL(value);
+    if (parsed.hostname.endsWith("duckduckgo.com") && parsed.pathname === "/l/") {
+      value = parsed.searchParams.get("uddg") || "";
+    }
+    const url = new URL(value);
+    return /^https?:$/.test(url.protocol) ? url.href.slice(0, 500) : "";
+  } catch {
+    return "";
+  }
+}
+
+function parseDuckDuckGoResults(html) {
+  const results = [];
+  const anchors = [...String(html || "").matchAll(/<a\b([^>]*class=["'][^"']*(?:result__a|result-link)[^"']*["'][^>]*)>([\s\S]*?)<\/a>/gi)];
+  for (const match of anchors) {
+    const href = match[1].match(/\bhref=["']([^"']+)["']/i)?.[1] || "";
+    const title = decodeSearchText(match[2]);
+    const url = cleanSearchUrl(href);
+    if (!title || !url) continue;
+    const position = match.index + match[0].length;
+    const nearby = String(html).slice(position, position + 1800);
+    const snippetMatch = nearby.match(/<(?:a|td|div)[^>]*class=["'][^"']*(?:result__snippet|result-snippet)[^"']*["'][^>]*>([\s\S]*?)<\/(?:a|td|div)>/i);
+    results.push({
+      title: title.slice(0, 180),
+      url,
+      snippet: decodeSearchText(snippetMatch?.[1] || "").slice(0, 900)
+    });
+  }
+  return results;
+}
+
+async function fetchDuckDuckGo(url) {
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (compatible; CodeMindAI/1.0; +https://oddossosososo.github.io/codemind-ai/)",
+      "Accept": "text/html,application/xhtml+xml"
+    },
+    signal: AbortSignal.timeout(12000)
+  });
+  if (!response.ok) throw new Error("DuckDuckGo HTTP " + response.status);
+  return parseDuckDuckGoResults(await response.text());
+}
+
+async function fetchWikipediaResults(query) {
+  const url = "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=" +
+    encodeURIComponent(query) + "&srlimit=3&format=json&origin=*";
+  const response = await fetch(url, {
+    headers: { "User-Agent": "CodeMindAI/1.0 (web search; contact via project site)" },
+    signal: AbortSignal.timeout(9000)
+  });
+  if (!response.ok) throw new Error("Wikipedia HTTP " + response.status);
+  const payload = await response.json();
+  return (payload?.query?.search || []).map(item => ({
+    title: decodeSearchText(item.title).slice(0, 180),
+    url: "https://en.wikipedia.org/wiki/" + encodeURIComponent(String(item.title || "").replace(/ /g, "_")),
+    snippet: decodeSearchText(item.snippet).slice(0, 900)
+  })).filter(item => item.title && item.url);
+}
+
 app.post("/api/search", async (req, res) => {
   const query = String(req.body?.query || "").trim().slice(0, 240);
   if (!query) return res.status(400).json({ error: "Enter something to search for." });
 
-  const apiKey = process.env.TAVILY_API_KEY;
-  if (!apiKey) {
-    return res.status(503).json({
-      error: "AI web search is not configured yet. Add TAVILY_API_KEY to the Render environment."
-    });
-  }
-
   const cacheKey = query.toLowerCase();
   const cached = webSearchCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
-    return res.json({ query, provider: "Tavily", results: cached.results, cached: true });
+    return res.json({ query, provider: cached.provider, results: cached.results, cached: true });
   }
 
-  try {
-    const upstream = await fetch("https://api.tavily.com/search", {
-      method: "POST",
-      headers: {
-        "Authorization": "Bearer " + apiKey,
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify({
-        query,
-        search_depth: "basic",
-        topic: "general",
-        max_results: 5,
-        include_answer: false,
-        include_raw_content: false
-      }),
-      signal: AbortSignal.timeout(18000)
-    });
+  const encoded = encodeURIComponent(query);
+  const sources = await Promise.allSettled([
+    fetchDuckDuckGo("https://html.duckduckgo.com/html/?q=" + encoded),
+    fetchDuckDuckGo("https://lite.duckduckgo.com/lite/?q=" + encoded),
+    fetchWikipediaResults(query)
+  ]);
 
-    const payload = await upstream.json().catch(() => ({}));
-    if (!upstream.ok) {
-      const detail = String(payload?.detail || payload?.error || "Unknown Tavily error").slice(0, 240);
-      console.error("Tavily Search error:", upstream.status, detail);
-      return res.status(upstream.status === 429 ? 429 : 502).json({
-        error: upstream.status === 429
-          ? "Tavily search is rate-limited. Try again shortly."
-          : "Tavily search failed. Check the TAVILY_API_KEY and Tavily account access."
+  const results = [];
+  const addResults = items => {
+    for (const item of items || []) {
+      if (!item?.title || !/^https?:\/\//i.test(item.url || "")) continue;
+      if (results.some(existing => existing.url === item.url)) continue;
+      results.push({
+        title: String(item.title).slice(0, 180),
+        url: String(item.url).slice(0, 500),
+        snippet: String(item.snippet || "").slice(0, 900)
       });
     }
+  };
 
-    const results = (Array.isArray(payload.results) ? payload.results : [])
-      .map(item => ({
-        title: String(item?.title || "").replace(/\s+/g, " ").trim().slice(0, 180),
-        url: String(item?.url || "").trim().slice(0, 500),
-        snippet: String(item?.content || item?.snippet || "").replace(/\s+/g, " ").trim().slice(0, 900)
-      }))
-      .filter(item => item.title && /^https?:\/\//i.test(item.url))
-      .filter((item, index, all) => all.findIndex(other => other.url === item.url) === index)
-      .slice(0, 5);
-
-    if (!results.length) {
-      return res.status(502).json({ error: "Tavily returned no usable search results. Try a different query." });
-    }
-
-    webSearchCache.set(cacheKey, { results, expiresAt: Date.now() + 120000 });
-    if (webSearchCache.size > 100) {
-      const oldestKey = webSearchCache.keys().next().value;
-      webSearchCache.delete(oldestKey);
-    }
-
-    return res.json({ query, provider: "Tavily", results });
-  } catch (error) {
-    console.error("Tavily Search unavailable:", error.message);
-    return res.status(502).json({ error: "Tavily search is temporarily unavailable. Try again shortly." });
+  for (const source of sources) {
+    if (source.status === "fulfilled") addResults(source.value);
+    else console.warn("Keyless search source failed:", source.reason?.message || "Unknown error");
   }
+
+  if (!results.length) {
+    return res.status(502).json({
+      error: "Free web search is temporarily unavailable from all search sources. Try again shortly."
+    });
+  }
+
+  const provider = "DuckDuckGo + Wikipedia (free, no API key)";
+  const payload = results.slice(0, 8);
+  webSearchCache.set(cacheKey, { results: payload, provider, expiresAt: Date.now() + 180000 });
+  if (webSearchCache.size > 150) {
+    const oldestKey = webSearchCache.keys().next().value;
+    webSearchCache.delete(oldestKey);
+  }
+
+  return res.json({ query, provider, results: payload });
 });
 
 const imageDailyUsage = new Map();
