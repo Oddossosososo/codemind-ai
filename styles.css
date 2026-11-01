@@ -188,3 +188,5 @@
 .testlab-line.warn{color:#f0cf88}.testlab-line.error{color:#ff9d9d}.testlab-line.system{color:#8ddbc9}
 @media(max-width:760px){.tool-view{width:calc(100% - 32px);padding-top:34px}.tool-card{padding:15px}.tool-card-top{flex-direction:column}.github-metrics{grid-template-columns:1fr}.sandbox-pill{font-size:7px}}
 @media(max-width:480px){.tool-toolbar select{width:100%}.tool-toolbar input{flex-basis:100%}.github-open-file,.search-input-row{flex-wrap:wrap}.github-open-file input,.search-input-row input{flex-basis:100%}.memory-list-heading{align-items:flex-start;flex-direction:column}.memory-list-heading input{width:100%}.sandbox-pill{margin-left:0}.testlab-toolbar{align-items:flex-start;flex-direction:column}}
+
+.sidebar{overflow-y:auto}.side-bottom{flex-shrink:0}
