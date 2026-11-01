@@ -560,6 +560,173 @@ document.querySelector("#githubOpenFile").addEventListener("click", () => {
   openEditorFile();
 });
 
+
+/* Smart Search reuses CodeMind's multi-source backend search. */
+document.querySelector("#smartSearchForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const query = document.querySelector("#smartSearchInput").value.trim();
+  if (!query) return;
+  const status = document.querySelector("#smartSearchStatus");
+  const resultsEl = document.querySelector("#smartSearchResults");
+  const submit = document.querySelector("#smartSearchSubmit");
+  submit.disabled = true;
+  submit.textContent = "Searching…";
+  status.textContent = "Searching available sources…";
+  resultsEl.replaceChildren();
+  try {
+    const response = await fetch(API_BASE_URL + "/api/search", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || "Search failed.");
+    status.textContent = (data.provider || "Web search") + (data.cached ? " · cached results" : "") + " · " + data.results.length + " results";
+    (data.results || []).forEach(result => {
+      const card = document.createElement("article");
+      card.className = "search-result";
+      const link = document.createElement("a");
+      link.href = result.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = result.title || result.url;
+      const url = document.createElement("div");
+      url.className = "search-result-url";
+      url.textContent = result.url;
+      const snippet = document.createElement("p");
+      snippet.textContent = result.snippet || "No description was provided.";
+      card.append(link, url, snippet);
+      resultsEl.append(card);
+    });
+    if (!data.results || !data.results.length) status.textContent = "No results were returned.";
+  } catch (error) {
+    status.textContent = error.message || "Search is temporarily unavailable.";
+  } finally {
+    submit.disabled = false;
+    submit.textContent = "Search";
+  }
+});
+
+/* Project memory is private to this browser profile. */
+const PROJECT_MEMORY_KEY = "codemind-project-memory-v1";
+function readProjectMemory() {
+  try {
+    const items = JSON.parse(localStorage.getItem(PROJECT_MEMORY_KEY) || "[]");
+    return Array.isArray(items) ? items.filter(item => item && typeof item.title === "string" && typeof item.body === "string").slice(0, 150) : [];
+  } catch { return []; }
+}
+function renderProjectMemory() {
+  const list = document.querySelector("#memoryList");
+  const filter = (document.querySelector("#memoryFilter").value || "").trim().toLowerCase();
+  const items = readProjectMemory().filter(item => (item.title + " " + item.body + " " + (item.repo || "")).toLowerCase().includes(filter));
+  list.replaceChildren();
+  document.querySelector("#memoryProjectLabel").textContent = activeGithubRepo || "General workspace";
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "memory-empty";
+    empty.textContent = filter ? "No notes match that filter." : "No project notes yet. Save a decision or useful snippet above.";
+    list.append(empty);
+    return;
+  }
+  items.forEach(item => {
+    const card = document.createElement("article");
+    card.className = "memory-note";
+    const head = document.createElement("div");
+    head.className = "memory-note-head";
+    const title = document.createElement("strong");
+    title.textContent = item.title;
+    const date = document.createElement("time");
+    date.textContent = new Date(item.updatedAt).toLocaleString();
+    head.append(title, date);
+    const body = document.createElement("p");
+    body.textContent = item.body;
+    const meta = document.createElement("div");
+    meta.className = "memory-note-meta";
+    meta.textContent = item.repo || "General workspace";
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "Delete";
+    remove.addEventListener("click", () => {
+      localStorage.setItem(PROJECT_MEMORY_KEY, JSON.stringify(readProjectMemory().filter(entry => entry.id !== item.id)));
+      renderProjectMemory();
+      showToast("Project note deleted.");
+    });
+    card.append(head, body, meta, remove);
+    list.append(card);
+  });
+}
+document.querySelector("#memoryNoteForm").addEventListener("submit", event => {
+  event.preventDefault();
+  const title = document.querySelector("#memoryNoteTitle").value.trim();
+  const body = document.querySelector("#memoryNoteBody").value.trim();
+  if (!title || !body) return;
+  const items = readProjectMemory();
+  items.unshift({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7), title, body, repo: activeGithubRepo || "General workspace", updatedAt: new Date().toISOString() });
+  localStorage.setItem(PROJECT_MEMORY_KEY, JSON.stringify(items.slice(0, 150)));
+  event.target.reset();
+  renderProjectMemory();
+  showToast("Project note saved locally.");
+});
+document.querySelector("#memoryFilter").addEventListener("input", renderProjectMemory);
+
+/* Test Lab executes JavaScript in a disposable worker with a hard timeout. */
+document.querySelector("#runTestLab").addEventListener("click", () => {
+  const code = document.querySelector("#testLabCode").value;
+  const output = document.querySelector("#testLabOutput");
+  const status = document.querySelector("#testLabStatus");
+  const runButton = document.querySelector("#runTestLab");
+  output.textContent = "";
+  status.textContent = "Running…";
+  runButton.disabled = true;
+  const workerSource = [
+    'const safeText = value => { try { return typeof value === "string" ? value : JSON.stringify(value); } catch { return String(value); } };',
+    'for (const method of ["log","info","warn","error","debug"]) console[method] = (...values) => postMessage({ type: "log", level: method, values: values.map(safeText) });',
+    'self.fetch = () => Promise.reject(new Error("Network access is disabled in Test Lab"));',
+    'self.XMLHttpRequest = class { constructor() { throw new Error("Network access is disabled in Test Lab"); } };',
+    'self.WebSocket = class { constructor() { throw new Error("Network access is disabled in Test Lab"); } };',
+    'self.EventSource = class { constructor() { throw new Error("Network access is disabled in Test Lab"); } };',
+    'self.Worker = class { constructor() { throw new Error("Nested workers are disabled in Test Lab"); } };',
+    'self.importScripts = () => { throw new Error("External scripts are disabled in Test Lab"); };',
+    'try { const result = new Function(' + JSON.stringify(code) + ')(); if (result && typeof result.then === "function") result.then(() => postMessage({ type: "done" })).catch(error => postMessage({ type: "error", message: error.stack || error.message })); else postMessage({ type: "done" }); } catch (error) { postMessage({ type: "error", message: error.stack || error.message }); }'
+  ].join("\n");
+  let worker;
+  let finished = false;
+  let workerUrl = "";
+  const appendOutput = (message, level) => {
+    const line = document.createElement("div");
+    line.className = "testlab-line " + level;
+    line.textContent = message;
+    output.append(line);
+  };
+  const finish = (message, failed = false) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timeout);
+    if (worker) worker.terminate();
+    if (workerUrl) URL.revokeObjectURL(workerUrl);
+    runButton.disabled = false;
+    status.textContent = failed ? "Stopped with an error" : "Finished";
+    if (message) appendOutput(message, failed ? "error" : "system");
+  };
+  const timeout = setTimeout(() => finish("Execution stopped after 3.5 seconds.", true), 3500);
+  try {
+    workerUrl = URL.createObjectURL(new Blob([workerSource], { type: "text/javascript" }));
+    worker = new Worker(workerUrl);
+    worker.onmessage = event => {
+      const data = event.data || {};
+      if (data.type === "log") appendOutput((data.values || []).join(" "), data.level || "log");
+      else if (data.type === "error") finish(data.message || "Unknown error", true);
+      else if (data.type === "done") finish("Execution complete.");
+    };
+    worker.onerror = event => finish(event.message || "Worker error.", true);
+  } catch (error) {
+    finish(error.message || "Could not start the isolated worker.", true);
+  }
+});
+document.querySelector("#clearTestLab").addEventListener("click", () => {
+  document.querySelector("#testLabOutput").textContent = "Output cleared.";
+  document.querySelector("#testLabStatus").textContent = "Ready";
+});
+
 function showWorkspaceTab(tab) {
   const views = { editor: "#editorView", github: "#githubView", search: "#searchView", memory: "#memoryView", testlab: "#testLabView", news: "#newsView", preferences: "#preferencesView" };
   Object.entries(views).forEach(([key, selector]) => {
@@ -892,3 +1059,4 @@ function initCodeMindPreferences() {
   });
 }
 initCodeMindPreferences();
+renderProjectMemory();
