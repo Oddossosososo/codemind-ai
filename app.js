@@ -242,6 +242,9 @@ document.querySelector("#fileForm").addEventListener("submit", async event => {
     commitButton.textContent = "Approve & commit";
     commitButton.hidden = true;
     commitRow.append(commitMessage, commitButton);
+    proposalEditor.addEventListener("input", () => {
+      if (pendingProposal) commitButton.disabled = proposalEditor.value === pendingProposal.original;
+    });
     editBox.append(editHeading, instruction, proposeButton, proposalStatus, proposalEditor, commitRow);
 
     let pendingProposal = null;
