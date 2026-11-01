@@ -507,9 +507,9 @@ async function readGithubRepositoryContext(repo, requestText) {
       );
       if (file.type !== "file" || !file.content) continue;
       const content = Buffer.from(file.content, file.encoding || "base64").toString("utf8");
-      const clipped = content.slice(0, Math.min(12000, remaining));
-      files.push({ path: file.path, sha: file.sha, content: clipped });
-      remaining -= clipped.length;
+      if (content.length > remaining) continue;
+      files.push({ path: file.path, sha: file.sha, content });
+      remaining -= content.length;
     } catch (error) {
       console.warn("Skipping repository context file:", item.path, error.message);
     }
