@@ -849,14 +849,11 @@ const webSearchCache = new Map();
 
 function decodeSearchText(value) {
   return String(value || "")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#x27;|&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&amp;/g, "&").replace(/&quot;/g, '"')
+    .replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">").replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ").trim();
 }
 
 function cleanSearchUrl(raw) {
@@ -864,46 +861,77 @@ function cleanSearchUrl(raw) {
   if (value.startsWith("//")) value = "https:" + value;
   try {
     const parsed = new URL(value);
-    if (parsed.hostname.endsWith("duckduckgo.com") && parsed.pathname === "/l/") {
-      value = parsed.searchParams.get("uddg") || "";
+    if ((parsed.hostname.endsWith("duckduckgo.com") && parsed.pathname === "/l/") ||
+        (parsed.hostname.endsWith("google.com") && parsed.pathname === "/url")) {
+      value = parsed.searchParams.get("uddg") || parsed.searchParams.get("q") || "";
     }
     const url = new URL(value);
     return /^https?:$/.test(url.protocol) ? url.href.slice(0, 500) : "";
-  } catch {
-    return "";
-  }
+  } catch { return ""; }
 }
 
-function parseDuckDuckGoResults(html) {
-  const results = [];
-  const anchors = [...String(html || "").matchAll(/<a\b([^>]*class=["'][^"']*(?:result__a|result-link)[^"']*["'][^>]*)>([\s\S]*?)<\/a>/gi)];
-  for (const match of anchors) {
-    const href = match[1].match(/\bhref=["']([^"']+)["']/i)?.[1] || "";
-    const title = decodeSearchText(match[2]);
-    const url = cleanSearchUrl(href);
-    if (!title || !url) continue;
-    const position = match.index + match[0].length;
-    const nearby = String(html).slice(position, position + 1800);
-    const snippetMatch = nearby.match(/<(?:a|td|div)[^>]*class=["'][^"']*(?:result__snippet|result-snippet)[^"']*["'][^>]*>([\s\S]*?)<\/(?:a|td|div)>/i);
-    results.push({
-      title: title.slice(0, 180),
-      url,
-      snippet: decodeSearchText(snippetMatch?.[1] || "").slice(0, 900)
-    });
-  }
-  return results;
-}
-
-async function fetchDuckDuckGo(url) {
+async function fetchSearchText(url, label, accept = "text/html,application/xhtml+xml") {
   const response = await fetch(url, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; CodeMindAI/1.0; +https://oddossosososo.github.io/codemind-ai/)",
-      "Accept": "text/html,application/xhtml+xml"
+      "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+      "Accept": accept,
+      "Accept-Language": "en-US,en;q=0.9"
     },
-    signal: AbortSignal.timeout(12000)
+    signal: AbortSignal.timeout(11000)
   });
-  if (!response.ok) throw new Error("DuckDuckGo HTTP " + response.status);
-  return parseDuckDuckGoResults(await response.text());
+  if (!response.ok) throw new Error(label + " HTTP " + response.status);
+  return response.text();
+}
+
+function parseBingRss(xml) {
+  return [...String(xml).matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)].map(match => {
+    const block = match[1];
+    const title = decodeSearchText(block.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]);
+    const url = cleanSearchUrl(decodeSearchText(block.match(/<link[^>]*>([\s\S]*?)<\/link>/i)?.[1]));
+    const snippet = decodeSearchText(block.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1]);
+    return { title: title.slice(0,180), url, snippet: snippet.slice(0,900) };
+  }).filter(item => item.title && item.url);
+}
+
+function parseGenericSearchHtml(html) {
+  const results = [];
+  const source = String(html || "");
+  const anchors = [...source.matchAll(/<a\b([^>]*href=["'][^"']+["'][^>]*)>([\s\S]*?)<\/a>/gi)];
+  for (const match of anchors) {
+    if (!/<h3\b/i.test(match[2])) continue;
+    const href = match[1].match(/\bhref=["']([^"']+)["']/i)?.[1] || "";
+    const title = decodeSearchText(match[2]).slice(0,180);
+    const url = cleanSearchUrl(href);
+    if (!title || !url) continue;
+    const nearby = source.slice(match.index + match[0].length, match.index + match[0].length + 1600);
+    const snippet = decodeSearchText(nearby.match(/<(?:div|p|span)[^>]*>([\s\S]{20,700}?)<\/(?:div|p|span)>/i)?.[1] || "").slice(0,900);
+    if (!results.some(item => item.url === url)) results.push({ title, url, snippet });
+  }
+  return results.slice(0,8);
+}
+
+async function fetchBingResults(query) {
+  const xml = await fetchSearchText(
+    "https://www.bing.com/search?format=rss&q=" + encodeURIComponent(query),
+    "Bing RSS",
+    "application/rss+xml,application/xml,text/xml"
+  );
+  return parseBingRss(xml);
+}
+
+async function fetchGoogleResults(query) {
+  const html = await fetchSearchText("https://www.google.com/search?gbv=1&q=" + encodeURIComponent(query), "Google");
+  return parseGenericSearchHtml(html);
+}
+
+async function fetchMojeekResults(query) {
+  const html = await fetchSearchText("https://www.mojeek.com/search?q=" + encodeURIComponent(query), "Mojeek");
+  return parseGenericSearchHtml(html);
+}
+
+async function fetchDuckDuckGoResults(query) {
+  const html = await fetchSearchText("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query), "DuckDuckGo");
+  return parseGenericSearchHtml(html);
 }
 
 async function fetchWikipediaResults(query) {
@@ -916,14 +944,14 @@ async function fetchWikipediaResults(query) {
   if (!response.ok) throw new Error("Wikipedia HTTP " + response.status);
   const payload = await response.json();
   return (payload?.query?.search || []).map(item => ({
-    title: decodeSearchText(item.title).slice(0, 180),
+    title: decodeSearchText(item.title).slice(0,180),
     url: "https://en.wikipedia.org/wiki/" + encodeURIComponent(String(item.title || "").replace(/ /g, "_")),
-    snippet: decodeSearchText(item.snippet).slice(0, 900)
+    snippet: decodeSearchText(item.snippet).slice(0,900)
   })).filter(item => item.title && item.url);
 }
 
 app.post("/api/search", async (req, res) => {
-  const query = String(req.body?.query || "").trim().slice(0, 240);
+  const query = String(req.body?.query || "").trim().slice(0,240);
   if (!query) return res.status(400).json({ error: "Enter something to search for." });
 
   const cacheKey = query.toLowerCase();
@@ -932,41 +960,58 @@ app.post("/api/search", async (req, res) => {
     return res.json({ query, provider: cached.provider, results: cached.results, cached: true });
   }
 
-  const encoded = encodeURIComponent(query);
-  const sources = await Promise.allSettled([
-    fetchDuckDuckGo("https://html.duckduckgo.com/html/?q=" + encoded),
-    fetchDuckDuckGo("https://lite.duckduckgo.com/lite/?q=" + encoded),
-    fetchWikipediaResults(query)
-  ]);
-
   const results = [];
   const addResults = items => {
     for (const item of items || []) {
       if (!item?.title || !/^https?:\/\//i.test(item.url || "")) continue;
       if (results.some(existing => existing.url === item.url)) continue;
       results.push({
-        title: String(item.title).slice(0, 180),
-        url: String(item.url).slice(0, 500),
-        snippet: String(item.snippet || "").slice(0, 900)
+        title: String(item.title).slice(0,180),
+        url: String(item.url).slice(0,500),
+        snippet: String(item.snippet || "").slice(0,900)
       });
     }
   };
 
-  for (const source of sources) {
-    if (source.status === "fulfilled") addResults(source.value);
-    else console.warn("Keyless search source failed:", source.reason?.message || "Unknown error");
+  // Prefer several independent sources. DuckDuckGo is a last-resort fallback,
+  // so its throttling does not take down the whole search feature.
+  const primary = await Promise.allSettled([
+    fetchBingResults(query),
+    fetchGoogleResults(query),
+    fetchMojeekResults(query),
+    fetchWikipediaResults(query)
+  ]);
+  const providers = [];
+  const labels = ["Bing RSS", "Google", "Mojeek", "Wikipedia"];
+  primary.forEach((source, index) => {
+    if (source.status === "fulfilled" && source.value.length) {
+      addResults(source.value);
+      providers.push(labels[index]);
+    } else if (source.status === "rejected") {
+      console.warn("Keyless search source failed:", labels[index], source.reason?.message || "Unknown error");
+    }
+  });
+
+  if (results.length < 3) {
+    try {
+      const fallback = await fetchDuckDuckGoResults(query);
+      addResults(fallback);
+      if (fallback.length) providers.push("DuckDuckGo fallback");
+    } catch (error) {
+      console.warn("Keyless search fallback failed: DuckDuckGo", error.message);
+    }
   }
 
   if (!results.length) {
     return res.status(502).json({
-      error: "Free web search is temporarily unavailable from all search sources. Try again shortly."
+      error: "Free search providers are temporarily limiting requests. Please wait a little and try again."
     });
   }
 
-  const provider = "DuckDuckGo + Wikipedia (free, no API key)";
-  const payload = results.slice(0, 8);
-  webSearchCache.set(cacheKey, { results: payload, provider, expiresAt: Date.now() + 180000 });
-  if (webSearchCache.size > 150) {
+  const provider = providers.join(" + ") + " (free, no API key)";
+  const payload = results.slice(0,8);
+  webSearchCache.set(cacheKey, { results: payload, provider, expiresAt: Date.now() + 600000 });
+  if (webSearchCache.size > 300) {
     const oldestKey = webSearchCache.keys().next().value;
     webSearchCache.delete(oldestKey);
   }
