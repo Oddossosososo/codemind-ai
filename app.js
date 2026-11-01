@@ -140,6 +140,94 @@ function setBusy(value) {
   sendButton.innerHTML = value ? '<span class="typing">···</span>' : '<span>↑</span>';
 }
 
+function showChatLimitDialog(retryText) {
+  const existing = document.querySelector(".chat-limit-overlay");
+  if (existing) return;
+  const overlay = document.createElement("div");
+  overlay.className = "chat-limit-overlay";
+  overlay.setAttribute("role", "presentation");
+  const dialog = document.createElement("section");
+  dialog.className = "chat-limit-dialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-labelledby", "chatLimitTitle");
+  const eyebrow = document.createElement("div");
+  eyebrow.className = "chat-limit-eyebrow";
+  eyebrow.textContent = "HOURLY MESSAGE LIMIT";
+  const title = document.createElement("h2");
+  title.id = "chatLimitTitle";
+  title.textContent = "100 messages used";
+  const description = document.createElement("p");
+  description.textContent = "You've reached the hourly message limit. Enter your access code on the keypad to unlock chat for 24 hours.";
+  const status = document.createElement("p");
+  status.className = "chat-limit-status";
+  status.setAttribute("role", "status");
+  const display = document.createElement("div");
+  display.className = "chat-limit-display";
+  display.setAttribute("aria-label", "Access code entry");
+  display.textContent = "— — — —";
+  let digits = "";
+  const paint = () => { display.textContent = digits.padEnd(4, "—").split("").join(" "); };
+  const keypad = document.createElement("div");
+  keypad.className = "chat-limit-keypad";
+  const addKey = (label, action, extraClass = "") => {
+    const key = document.createElement("button");
+    key.type = "button";
+    key.className = "chat-limit-key " + extraClass;
+    key.textContent = label;
+    key.addEventListener("click", action);
+    keypad.appendChild(key);
+  };
+  for (const digit of ["1","2","3","4","5","6","7","8","9"]) {
+    addKey(digit, () => { if (digits.length < 4) digits += digit; paint(); status.textContent = ""; });
+  }
+  addKey("Clear", () => { digits = ""; paint(); status.textContent = ""; }, "wide");
+  addKey("0", () => { if (digits.length < 4) digits += "0"; paint(); status.textContent = ""; });
+  addKey("⌫", () => { digits = digits.slice(0, -1); paint(); status.textContent = ""; }, "utility");
+  const unlock = document.createElement("button");
+  unlock.type = "button";
+  unlock.className = "chat-limit-unlock";
+  unlock.textContent = "Unlock chat";
+  unlock.disabled = true;
+  unlock.addEventListener("click", async () => {
+    if (digits.length !== 4) return;
+    unlock.disabled = true;
+    status.textContent = "Checking access code…";
+    try {
+      const response = await fetch(API_BASE_URL + "/api/chat/unlock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ code: digits })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Access code rejected.");
+      overlay.remove();
+      input.value = retryText;
+      resizeInput();
+      input.focus();
+      showToast("Chat unlocked for 24 hours. Press send to retry your message.");
+    } catch (error) {
+      digits = "";
+      paint();
+      status.textContent = error.message;
+      unlock.disabled = false;
+    }
+  });
+  const updateUnlock = () => { unlock.disabled = digits.length !== 4; };
+  keypad.addEventListener("click", updateUnlock);
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "chat-limit-close";
+  close.textContent = "Close";
+  close.addEventListener("click", () => overlay.remove());
+  dialog.append(eyebrow, title, description, display, keypad, status, unlock, close);
+  overlay.appendChild(dialog);
+  overlay.addEventListener("click", event => { if (event.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  paint();
+}
+
 function renderAgentRunDetails(data) {
   if (!data || (!data.plan && !Array.isArray(data.agents))) return;
   const panel = document.createElement("section");
@@ -413,14 +501,18 @@ async function sendMessage(text) {
       data = await response.json().catch(() => ({}));
       editRouteFallback = response.ok;
     }
-    if (!response.ok) throw new Error(data.error || `Backend request failed (HTTP ${response.status}) at ${endpoint}. Check the Render service and its logs.`);
+    if (!response.ok) {
+      const requestError = new Error(data.error || "Backend request failed (HTTP " + response.status + ").");
+      requestError.code = data.code || "";
+      throw requestError;
+    }
     if (editRouteFallback) data.reply = "The structured GitHub edit service is not deployed yet, so I used repository-aware chat as a fallback. I can still inspect the repository and draft the changes, but the approve-and-commit panel is unavailable until the backend is redeployed.\n\n" + data.reply;
     if (useAgentMode && activeGithubRepo && asksForEdit) {
       pending.querySelector(".typing").textContent = "Preparing reviewable GitHub changes···";
       try {
         const editResponse = await fetch(API_BASE_URL + "/api/github/chat-edit", {
           method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-          body: JSON.stringify({ repo: activeGithubRepo, messages: preferenceMessages, editInstruction, preferences: preferenceContext, projectMemory: projectMemoryContext })
+          body: JSON.stringify({ repo: activeGithubRepo, messages: preferenceMessages, editInstruction, preferences: preferenceContext, projectMemory: projectMemoryContext, agentFollowup: true })
         });
         const editData = await editResponse.json().catch(() => ({}));
         if (editResponse.ok && Array.isArray(editData.edits)) {
@@ -438,7 +530,13 @@ async function sendMessage(text) {
     if (useEditWorkflow && data.edits?.length) chatEditResult = data.edits;
     if (useAgentMode) window.lastAgentRun = data;
   } catch (error) {
-    messages.push({ role: "assistant", content: "I couldn't connect: " + error.message + "\n\nCheck that the CodeMind AI backend is deployed and GitHub is connected." }); saveMessages();
+    if (error.code === "CHAT_HOURLY_LIMIT") {
+      input.value = content;
+      resizeInput();
+      showChatLimitDialog(content);
+    } else {
+      messages.push({ role: "assistant", content: "I couldn't connect: " + error.message + "\n\nCheck that the CodeMind AI backend is deployed and GitHub is connected." }); saveMessages();
+    }
   } finally {
     setBusy(false); render();
     if (window.lastAgentRun) { renderAgentRunDetails(window.lastAgentRun); window.lastAgentRun = null; }
