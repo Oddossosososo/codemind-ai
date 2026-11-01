@@ -431,6 +431,135 @@ activeRepoSelect.addEventListener("change", () => {
   if (activeGithubRepo) localStorage.setItem(REPO_STORAGE_KEY, activeGithubRepo); else localStorage.removeItem(REPO_STORAGE_KEY);
   showToast(activeGithubRepo ? "Chat connected to " + activeGithubRepo : "Repository context turned off.");
 });
+
+/* Code editor: local drafts plus explicit, reviewed GitHub writes. */
+const EDITOR_DRAFT_KEY = "codemind-editor-draft-v1";
+let editorFile = null;
+const editorCode = document.querySelector("#editorCode");
+const editorPath = document.querySelector("#editorPath");
+const editorLanguage = document.querySelector("#editorLanguage");
+const editorStatus = document.querySelector("#editorStatus");
+function saveEditorDraft(showNotice = true) {
+  localStorage.setItem(EDITOR_DRAFT_KEY, JSON.stringify({ code: editorCode.value, language: editorLanguage.value, path: editorPath.value }));
+  if (showNotice) showToast("Editor draft saved in this browser.");
+}
+try {
+  const draft = JSON.parse(localStorage.getItem(EDITOR_DRAFT_KEY) || "null");
+  if (draft) {
+    editorCode.value = typeof draft.code === "string" ? draft.code : "";
+    editorLanguage.value = draft.language || "javascript";
+    editorPath.value = draft.path || "";
+  }
+} catch {}
+editorCode.addEventListener("input", () => {
+  editorStatus.textContent = editorFile ? "Editing " + editorFile.path + " · unsaved changes" : "Local draft · unsaved changes";
+});
+document.querySelector("#saveEditorLocal").addEventListener("click", () => saveEditorDraft());
+async function openEditorFile() {
+  const repo = activeGithubRepo;
+  const path = editorPath.value.trim().replace(/^\/+/, "");
+  if (!repo) return showToast("Select a connected GitHub repository first.");
+  if (!path || path.split("/").includes("..")) return showToast("Enter a valid relative file path.");
+  const button = document.querySelector("#openEditorFile");
+  button.disabled = true;
+  button.textContent = "Opening…";
+  try {
+    const data = await githubFetch("/api/github/file?repo=" + encodeURIComponent(repo) + "&path=" + encodeURIComponent(path));
+    editorCode.value = data.content || "";
+    editorPath.value = data.path || path;
+    editorFile = { repo, path: data.path || path, sha: data.sha || "" };
+    editorStatus.textContent = repo + " / " + editorFile.path + (editorFile.sha ? " · loaded from GitHub" : " · backend update required to save");
+    saveEditorDraft(false);
+    showToast("Opened " + editorFile.path);
+  } catch (error) {
+    showToast(error.message || "Couldn't open that GitHub file.");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Open file";
+  }
+}
+document.querySelector("#openEditorFile").addEventListener("click", openEditorFile);
+document.querySelector("#saveEditorGithub").addEventListener("click", async () => {
+  if (!editorFile || !editorFile.sha) return showToast("Open a GitHub file first.");
+  if (editorFile.repo !== activeGithubRepo) return showToast("The selected repository changed. Reopen the file before saving.");
+  if (!window.confirm("Save the reviewed editor contents to " + editorFile.repo + "/" + editorFile.path + "?")) return;
+  const button = document.querySelector("#saveEditorGithub");
+  button.disabled = true;
+  button.textContent = "Saving…";
+  try {
+    await githubPost("/api/github/commit-file", {
+      repo: editorFile.repo, path: editorFile.path, sha: editorFile.sha,
+      content: editorCode.value, message: "Update " + editorFile.path + " via CodeMind AI editor"
+    });
+    const fresh = await githubFetch("/api/github/file?repo=" + encodeURIComponent(editorFile.repo) + "&path=" + encodeURIComponent(editorFile.path));
+    editorFile.sha = fresh.sha || "";
+    editorStatus.textContent = editorFile.repo + " / " + editorFile.path + " · saved to GitHub";
+    saveEditorDraft(false);
+    showToast("GitHub file saved.");
+  } catch (error) {
+    showToast(error.message || "GitHub save failed. Reopen the file and retry.");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Review & save to GitHub";
+  }
+});
+document.querySelector("#sendEditorChat").addEventListener("click", () => {
+  const code = editorCode.value.trim();
+  if (!code) return showToast("Add some code to the editor first.");
+  showWorkspaceTab("chat");
+  sendMessage("Please review this " + editorLanguage.value + " code and help me improve it:\n\n\x60\x60\x60" + editorLanguage.value + "\n" + code.slice(0, 12000) + "\n\x60\x60\x60");
+});
+
+/* GitHub intelligence uses the existing authenticated repository API. */
+async function refreshGithubWorkspace() {
+  const title = document.querySelector("#githubConnectionTitle");
+  const text = document.querySelector("#githubConnectionText");
+  const diagnostics = document.querySelector("#githubDiagnostics");
+  title.textContent = "Checking GitHub…";
+  text.textContent = "Loading repository access and installation status.";
+  try {
+    const results = await Promise.all([githubFetch("/api/github/status"), loadRepositories()]);
+    const status = results[0];
+    const repositories = results[1];
+    title.textContent = "GitHub connected";
+    text.textContent = "Authenticated owner workspace · " + (status.owner || "connected");
+    document.querySelector("#githubRepoCount").textContent = String(status.repositoryCount ?? repositories.length);
+    document.querySelector("#githubSelectedRepo").textContent = activeGithubRepo || "None selected";
+    diagnostics.textContent = "Connection ready. Run diagnostics to inspect installation permissions.";
+  } catch (error) {
+    title.textContent = error.status === 401 ? "GitHub not connected" : "Connection unavailable";
+    text.textContent = error.message || "Reconnect GitHub or check the backend.";
+    document.querySelector("#githubRepoCount").textContent = "—";
+    document.querySelector("#githubSelectedRepo").textContent = activeGithubRepo || "None selected";
+    diagnostics.textContent = error.message || "GitHub status could not be loaded.";
+  }
+}
+document.querySelector("#connectGithub").addEventListener("click", () => {
+  window.location.href = API_BASE_URL + "/auth/github";
+});
+document.querySelector("#refreshGithub").addEventListener("click", refreshGithubWorkspace);
+document.querySelector("#runGithubDiagnostics").addEventListener("click", async () => {
+  const output = document.querySelector("#githubDiagnostics");
+  output.textContent = "Running GitHub diagnostics…";
+  try {
+    const suffix = activeGithubRepo ? "?repo=" + encodeURIComponent(activeGithubRepo) : "";
+    const data = await githubFetch("/api/github/diagnostics" + suffix);
+    const permissions = data.tokenPermissions || data.installationPermissions || {};
+    document.querySelector("#githubContentsPermission").textContent = permissions.contents || "Not reported";
+    output.textContent = JSON.stringify(data, null, 2);
+  } catch (error) {
+    document.querySelector("#githubContentsPermission").textContent = "Unavailable";
+    output.textContent = error.message || "Diagnostics failed.";
+  }
+});
+document.querySelector("#githubOpenFile").addEventListener("click", () => {
+  const path = document.querySelector("#githubFilePath").value.trim();
+  if (!path) return showToast("Enter a file path first.");
+  editorPath.value = path;
+  showWorkspaceTab("editor");
+  openEditorFile();
+});
+
 function showWorkspaceTab(tab) {
   const views = { editor: "#editorView", github: "#githubView", search: "#searchView", memory: "#memoryView", testlab: "#testLabView", news: "#newsView", preferences: "#preferencesView" };
   Object.entries(views).forEach(([key, selector]) => {
