@@ -6,6 +6,9 @@ const githubPanel = document.querySelector("#githubPanel");
 const chatArea = document.querySelector("#chatArea");
 const githubStatus = document.querySelector("#githubStatus");
 const repoSelect = document.querySelector("#repoSelect");
+const activeRepoSelect = document.querySelector("#activeRepoSelect");
+const REPO_STORAGE_KEY = "codemind-selected-repo-v1";
+let activeGithubRepo = localStorage.getItem(REPO_STORAGE_KEY) || "";
 const fileViewer = document.querySelector("#fileViewer");
 const sendButton = document.querySelector("#sendButton");
 const toast = document.querySelector("#toast");
@@ -79,7 +82,8 @@ async function sendMessage(text) {
       credentials: "include",
       body: JSON.stringify({
         messages: messages.slice(-20),
-        githubFile: activeGithubFile
+        githubFile: activeGithubFile,
+        githubRepo: activeGithubRepo
       })
     });
     const data = await response.json().catch(() => ({}));
@@ -175,10 +179,24 @@ async function loadGithubStatus() {
 }
 async function loadRepositories() {
   const data = await githubFetch("/api/github/repos");
-  repoSelect.innerHTML = '<option value="">Choose a repository…</option>' +
-    data.repositories.map(repo => '<option value="' + escapeHTML(repo.full_name) + '">' +
-      escapeHTML(repo.full_name) + (repo.private ? " · private" : "") + '</option>').join("");
+  const options = data.repositories.map(repo => '<option value="' + escapeHTML(repo.full_name) + '">' +
+    escapeHTML(repo.full_name) + (repo.private ? " · private" : "") + '</option>').join("");
+  repoSelect.innerHTML = '<option value="">Choose a repository…</option>' + options;
+  activeRepoSelect.innerHTML = '<option value="">No repository selected</option>' + options;
+  if (data.repositories.some(repo => repo.full_name === activeGithubRepo)) {
+    activeRepoSelect.value = activeGithubRepo;
+  } else {
+    activeGithubRepo = "";
+    localStorage.removeItem(REPO_STORAGE_KEY);
+    activeRepoSelect.value = "";
+  }
 }
+activeRepoSelect.addEventListener("change", () => {
+  activeGithubRepo = activeRepoSelect.value;
+  if (activeGithubRepo) localStorage.setItem(REPO_STORAGE_KEY, activeGithubRepo);
+  else localStorage.removeItem(REPO_STORAGE_KEY);
+  showToast(activeGithubRepo ? "Chat is now connected to " + activeGithubRepo : "Repository context turned off.");
+});
 githubButton.addEventListener("click", showGithubPanel);
 document.querySelector("#connectGithub").addEventListener("click", () => {
   window.location.href = API_BASE_URL + "/auth/github";
@@ -324,3 +342,6 @@ document.addEventListener("keydown", event => {
   }
 });
 render();
+if (new URLSearchParams(location.search).get("github") !== "connected") {
+  githubFetch("/api/github/status").then(() => loadRepositories()).catch(() => {});
+}
