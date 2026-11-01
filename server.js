@@ -761,7 +761,17 @@ app.post("/api/github/chat-edit", requireOwner, async (req, res) => {
 
 
 // Multi-agent task runner. Agents only analyse and propose; repository writes stay in the reviewed edit workflow.
+const AGENT_RUN_LIMITS = new Map();
 app.post("/api/agent/run", async (req, res) => {
+  const agentKey = imageUsageKey(req);
+  const agentNow = Date.now();
+  const recentAgentRuns = (AGENT_RUN_LIMITS.get(agentKey) || []).filter(time => agentNow - time < 60000);
+  if (recentAgentRuns.length >= 4) return res.status(429).json({ error: "Agent Mode is limited to 4 runs per minute. Please wait a moment and try again." });
+  recentAgentRuns.push(agentNow);
+  AGENT_RUN_LIMITS.set(agentKey, recentAgentRuns);
+  if (AGENT_RUN_LIMITS.size > 10000) {
+    for (const [key, times] of AGENT_RUN_LIMITS) if (!times.some(time => agentNow - time < 60000)) AGENT_RUN_LIMITS.delete(key);
+  }
   if (!API_KEY) return res.status(503).json({ error: "The server owner needs to configure GROQ_API_KEY." });
   const incoming = Array.isArray(req.body?.messages)
     ? limitConversationMessages(req.body.messages.slice(-8), 2600, 1000)
