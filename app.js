@@ -750,7 +750,7 @@ function initCodeMindPreferences() {
   customInput.addEventListener("keydown", event => { if (event.key === "Enter") document.querySelector("#addCustomPreference").click(); });
   document.querySelector("#savePreferences").addEventListener("click", () => {
     const next = { skill: skill.value, length: document.querySelector("#prefLength").value,
-      style: document.querySelector("#prefStyle").value, hacks: document.querySelector("#prefHacks").checked };
+      style: document.querySelector("#prefStyle").value, hacks: document.querySelector("#prefHacks").checked, custom: readCodeMindPreferences().custom };
     localStorage.setItem(CODEMIND_PREFS_KEY, JSON.stringify(next));
     showToast("Preferences saved.");
   });
