@@ -1,8 +1,8 @@
 {
-  "name": "codemind-ai",
+  "name": "gyattgpt",
   "version": "0.1.0",
   "private": true,
-  "description": "A personal coding-focused AI workspace powered by Groq.",
+  "description": "GyattGPT — an AI assistant powered by Groq.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
