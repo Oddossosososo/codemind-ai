@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="app-shell">
@@ -21,6 +21,7 @@
       <button class="new-chat" id="newChat"><span>＋</span> New chat <kbd>⌘ K</kbd></button>
       <div class="side-label">WORKSPACE</div>
       <button class="side-link active"><span class="side-icon">◈</span> Chat</button>
+      <button class="side-link" id="githubButton"><span class="side-icon">⌘</span> GitHub <span class="soon">NEW</span></button>
       <button class="side-link" id="projectsButton"><span class="side-icon">▦</span> Projects <span class="soon">SOON</span></button>
       <button class="side-link" id="memoryButton"><span class="side-icon">⌁</span> Memory <span class="soon">LOCAL</span></button>
       <div class="side-bottom">
@@ -44,6 +45,23 @@
         <div class="top-actions"><span class="private-pill"><i></i> LOCAL HISTORY</span><button class="icon-button" id="clearChat" title="Clear conversation">↺</button></div>
       </header>
 
+      <section class="github-panel" id="githubPanel" hidden>
+        <div class="github-heading">
+          <div><div class="eyebrow"><span></span> REPOSITORY WORKSPACE</div><h2>GitHub <em>Explorer</em></h2><p>Connect your owner account, choose an installed repository, and open source files.</p></div>
+          <button class="connect-github" id="connectGithub">Connect GitHub ↗</button>
+        </div>
+        <div class="github-status" id="githubStatus" role="status">Not connected yet.</div>
+        <div class="github-controls">
+          <label>REPOSITORY<select id="repoSelect"><option value="">Connect GitHub to load repositories</option></select></label>
+          <button class="refresh-repos" id="refreshRepos">↻ Refresh</button>
+        </div>
+        <form class="file-form" id="fileForm">
+          <label for="filePath">FILE PATH</label>
+          <div class="file-input-row"><input id="filePath" placeholder="e.g. src/app.js" autocomplete="off"><button type="submit">Open file</button></div>
+        </form>
+        <div class="file-viewer" id="fileViewer"><div class="file-empty">Your selected file will appear here.</div></div>
+        <p class="github-note">Read-only access. CodeMind will not change your repositories.</p>
+      </section>
       <section class="chat-area" id="chatArea">
         <div class="welcome" id="welcome">
           <div class="eyebrow"><span></span> YOUR CODING PARTNER</div>
@@ -72,6 +90,6 @@
     </main>
   </div>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/app.js" defer></script>
+  <script src="app.js" defer></script>
 </body>
 </html>
