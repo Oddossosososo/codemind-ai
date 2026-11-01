@@ -1353,6 +1353,27 @@ app.post("/api/chat", async (req, res) => {
 });
 
 
+
+/* Public live room: every participant can read every message. */
+const LIVE_ROOM_MESSAGES = [];
+let liveRoomSequence = 1;
+
+app.get("/api/live-chat", (_req, res) => {
+  res.json({ messages: LIVE_ROOM_MESSAGES.slice(-150) });
+});
+
+app.post("/api/live-chat", (req, res) => {
+  const guestId = String(req.body?.guestId || "");
+  const username = String(req.body?.username || "Guest").trim().replace(/[<>]/g, "").slice(0, 24) || "Guest";
+  const message = String(req.body?.message || "").trim();
+  if (!/^[a-zA-Z0-9_-]{12,80}$/.test(guestId)) return res.status(400).json({ error: "Invalid guest session." });
+  if (!message || message.length > 700) return res.status(400).json({ error: "Messages must be 1–700 characters." });
+  const item = { id: liveRoomSequence++, guestId, username, message, createdAt: new Date().toISOString() };
+  LIVE_ROOM_MESSAGES.push(item);
+  if (LIVE_ROOM_MESSAGES.length > 300) LIVE_ROOM_MESSAGES.shift();
+  res.status(201).json({ message: item });
+});
+
 /* Guest-to-owner inbox. Messages are visible to the authenticated site owner. */
 const GUEST_INBOX_MESSAGES = [];
 const GUEST_INBOX_RATE = new Map();
