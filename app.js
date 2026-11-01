@@ -2,6 +2,11 @@ const form = document.querySelector("#chatForm");
 const input = document.querySelector("#messageInput");
 const messagesEl = document.querySelector("#messages");
 const welcome = document.querySelector("#welcome");
+const chatArea = document.querySelector("#chatArea");
+const newsView = document.querySelector("#newsView");
+const chatButton = document.querySelector("#chatButton");
+const newsButton = document.querySelector("#newsButton");
+const composerWrap = document.querySelector(".composer-wrap");
 const activeRepoSelect = document.querySelector("#activeRepoSelect");
 const REPO_STORAGE_KEY = "codemind-selected-repo-v1";
 let activeGithubRepo = localStorage.getItem(REPO_STORAGE_KEY) || "";
@@ -332,6 +337,17 @@ activeRepoSelect.addEventListener("change", () => {
   if (activeGithubRepo) localStorage.setItem(REPO_STORAGE_KEY, activeGithubRepo); else localStorage.removeItem(REPO_STORAGE_KEY);
   showToast(activeGithubRepo ? "Chat connected to " + activeGithubRepo : "Repository context turned off.");
 });
+function showWorkspaceTab(tab) {
+  const showNews = tab === "news";
+  newsView.hidden = !showNews;
+  chatArea.hidden = showNews;
+  composerWrap.hidden = showNews;
+  chatButton.classList.toggle("active", !showNews);
+  newsButton.classList.toggle("active", showNews);
+  document.querySelector(".breadcrumb strong").textContent = showNews ? "News" : "New conversation";
+}
+chatButton.addEventListener("click", () => showWorkspaceTab("chat"));
+newsButton.addEventListener("click", () => showWorkspaceTab("news"));
 document.querySelector("#projectsButton").addEventListener("click", () => showToast("Project workspace is coming in a later version."));
 document.querySelector("#mobileMenu").addEventListener("click", () => document.querySelector("#sidebar").classList.toggle("open"));
 document.addEventListener("keydown", event => {
