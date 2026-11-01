@@ -940,55 +940,88 @@ app.post("/api/chat", async (req, res) => {
 
     if ((mentionsGeometryDash || asksForLevelId || requestedCreator) && levelName) {
       try {
-        const matches = await fetchGDBrowserLevelSearch(levelName);
-        const nameMatches = matches.filter(item =>
+        const boomlingsMatches = await fetchGDBrowserLevelSearch(levelName);
+
+        // Never display a Boomlings candidate as confirmed until GDBrowser independently
+        // confirms that exact ID, level name, and creator.
+        const verifiedMatches = [];
+        for (const candidate of boomlingsMatches.slice(0, 20)) {
+          try {
+            const verified = await fetchGDBrowserLevel(candidate.id);
+            if (!verified) continue;
+            const sameName = verified.name.trim().toLowerCase() === candidate.name.trim().toLowerCase();
+            const sameCreator = verified.author.trim().toLowerCase() === candidate.author.trim().toLowerCase();
+            if (!sameName || !sameCreator) continue;
+            verifiedMatches.push(verified);
+          } catch (verificationError) {
+            console.warn("GDBrowser verification failed for level", candidate.id, verificationError.message);
+          }
+        }
+
+        const nameMatches = verifiedMatches.filter(item =>
           item.name.trim().toLowerCase() === levelName.toLowerCase()
         );
         const creatorMatches = requestedCreator
           ? nameMatches.filter(item => item.author.trim().toLowerCase() === requestedCreator.toLowerCase())
           : nameMatches;
 
+        const searchUrl = "https://gdbrowser.com/search/" + encodeURIComponent(levelName);
+        const formatLevel = item =>
+          "- **" + item.name + "** — ID **" + item.id + "** — by " + item.author +
+          " (" + item.url + ")";
+
         if (creatorMatches.length === 1) {
           const level = creatorMatches[0];
           return res.json({
-            reply: "Found **" + level.name + "** by **" + level.author + "**. Level ID: **" + level.id + "**\n\n" +
-              level.url + "\n\nGDBrowser search: https://gdbrowser.com/search/" + encodeURIComponent(levelName)
+            reply: "Verified by Boomlings and GDBrowser: **" + level.name + "** by **" + level.author +
+              "**. Level ID: **" + level.id + "**\n\n" + level.url +
+              "\n\nGDBrowser search: " + searchUrl
           });
         }
         if (creatorMatches.length > 1) {
           return res.json({
-            reply: "I found multiple exact matches for **" + levelName + "** by **" + requestedCreator + "**:\n" +
-              creatorMatches.map(item => "- **" + item.name + "** — ID **" + item.id + "** — by " + item.author + " (" + item.url + ")").join("\n")
+            reply: "I verified multiple exact matches for **" + levelName + "** by **" + requestedCreator +
+              "** using both Boomlings and GDBrowser:\n" + creatorMatches.map(formatLevel).join("\n") +
+              "\n\nGDBrowser search: " + searchUrl
           });
         }
         if (requestedCreator && nameMatches.length) {
           return res.json({
-            reply: "I found **" + nameMatches.length + "** level(s) named **" + levelName + "**, but none were by **" + requestedCreator + "**. I won't substitute another creator.\n\nGDBrowser search: https://gdbrowser.com/search/" + encodeURIComponent(levelName) + "\n\nPossible creators: " +
-              [...new Set(nameMatches.map(item => item.author))].join(", ")
+            reply: "I verified level(s) named **" + levelName + "**, but none were created by **" +
+              requestedCreator + "**. I won't substitute another creator.\n\nVerified results:\n" +
+              nameMatches.map(formatLevel).join("\n") + "\n\nGDBrowser search: " + searchUrl
           });
         }
         if (!requestedCreator && nameMatches.length === 1) {
           const level = nameMatches[0];
           return res.json({
-            reply: "The Geometry Dash level **" + level.name + "** by **" + level.author + "** has ID **" + level.id + "**.\n\n" +
-              level.url + "\n\nGDBrowser search: https://gdbrowser.com/search/" + encodeURIComponent(levelName)
+            reply: "Verified by Boomlings and GDBrowser: **" + level.name + "** by **" + level.author +
+              "** has ID **" + level.id + "**.\n\n" + level.url +
+              "\n\nGDBrowser search: " + searchUrl
           });
         }
         if (nameMatches.length > 1) {
           return res.json({
-            reply: "I found multiple exact matches for **" + levelName + "**:\n" +
-              nameMatches.map(item => "- **" + item.name + "** — ID **" + item.id + "** — by " + item.author + " (" + item.url + ")").join("\n")
+            reply: "I verified multiple exact matches for **" + levelName + "**:\n" +
+              nameMatches.map(formatLevel).join("\n") + "\n\nGDBrowser search: " + searchUrl
           });
         }
-        if (matches.length) {
+        const possibleMatches = verifiedMatches.filter(item =>
+          item.name.toLowerCase().includes(levelName.toLowerCase()) ||
+          levelName.toLowerCase().includes(item.name.toLowerCase())
+        );
+        if (possibleMatches.length) {
           return res.json({
-            reply: "I couldn't verify an exact name match for **" + levelName + "**. These are possible matches, not confirmed answers:\n" +
-              matches.slice(0, 5).map(item => "- " + item.name + " — ID **" + item.id + "** (by " + item.author + ")").join("\n") +
-              "\n\nGDBrowser search: https://gdbrowser.com/search/" + encodeURIComponent(levelName)
+            reply: "I couldn't verify an exact name match for **" + levelName +
+              "**. These are independently verified possible matches, not confirmed answers:\n" +
+              possibleMatches.slice(0, 5).map(formatLevel).join("\n") +
+              "\n\nGDBrowser search: " + searchUrl
           });
         }
         return res.json({
-          reply: "Boomlings didn't return a matching level for **" + levelName + "**. I won't guess its ID.\n\nGDBrowser search: https://gdbrowser.com/search/" + encodeURIComponent(levelName)
+          reply: "I couldn't verify **" + levelName +
+            "**. Boomlings candidates must also pass GDBrowser ID, name, and creator checks before I show them.\n\nGDBrowser search: " +
+            searchUrl + "\n\nNo level ID or stats will be guessed."
         });
       } catch (error) {
         console.warn("Boomlings level search failed:", error.message);
