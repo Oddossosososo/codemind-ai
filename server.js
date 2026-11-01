@@ -752,7 +752,7 @@ function decodeSearchHtml(value) {
 }
 
 async function fetchGDBrowserLevel(levelId) {
-  if (!/^\\d{1,12}$/.test(String(levelId))) return null;
+  if (!/^\d{1,12}$/.test(String(levelId))) return null;
   const response = await fetch("https://gdbrowser.com/api/level/" + encodeURIComponent(levelId), {
     headers: { "User-Agent": "CodeMind-AI/1.0 (Geometry Dash level lookup)" },
     signal: AbortSignal.timeout(10000)
@@ -850,22 +850,22 @@ app.post("/api/chat", async (req, res) => {
       return res.status(error.status || 502).json({ error: "Could not load the selected GitHub repository: " + error.message });
     }
   }
-  const conversationText = allowed.map(item => item.content).join("\\n");
-  const mentionsGeometryDash = /geometry\\s*dash|\\bGD\\b|gdbrowser/i.test(conversationText);
-  const explicitLevelId = conversationText.match(/(?:level\\s*(?:id)?\\s*[:#]?\\s*|\\bid\\s*[:#]\\s*)(\\d{1,12})/i);
+  const conversationText = allowed.map(item => item.content).join("\n");
+  const mentionsGeometryDash = /geometry\s*dash|\bGD\b|gdbrowser/i.test(conversationText);
+  const explicitLevelId = conversationText.match(/(?:level\s*(?:id)?\s*[:#]?\s*|\bid\s*[:#]\s*)(\d{1,12})/i);
   const gdIdFromContext = mentionsGeometryDash
-    ? conversationText.match(/\\b(?:level|id)\\s+(\\d{1,12})\\b/i)
+    ? conversationText.match(/\b(?:level|id)\s+(\d{1,12})\b/i)
     : null;
   const gdLevelId = explicitLevelId?.[1] || gdIdFromContext?.[1];
   if (mentionsGeometryDash && gdLevelId) {
     try {
       const level = await fetchGDBrowserLevel(gdLevelId);
       systemContent += level
-        ? "\\n\\nGD BROWSER LEVEL DATA (retrieved live for level ID " + gdLevelId + "; use as factual reference):\\n" + JSON.stringify(level)
-        : "\\n\\nGD BROWSER LEVEL LOOKUP: No level was returned for ID " + gdLevelId + ". Do not guess its details.";
+        ? "\n\nGD BROWSER LEVEL DATA (retrieved live for level ID " + gdLevelId + "; use as factual reference):\n" + JSON.stringify(level)
+        : "\n\nGD BROWSER LEVEL LOOKUP: No level was returned for ID " + gdLevelId + ". Do not guess its details.";
     } catch (error) {
       console.warn("GDBrowser level lookup failed:", error.message);
-      systemContent += "\\n\\nGD BROWSER LEVEL LOOKUP: The live lookup for ID " + gdLevelId + " failed. Be transparent and do not invent level details.";
+      systemContent += "\n\nGD BROWSER LEVEL LOOKUP: The live lookup for ID " + gdLevelId + " failed. Be transparent and do not invent level details.";
     }
   }
 
