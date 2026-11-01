@@ -192,7 +192,27 @@ function isProjectRelatedRequest(text) {
   return /\b(my|this|the)\s+(project|repo|repository|website|web app|app|game|codebase|code|script|file|site|github)\b|\b(github repo|source code|bug in|error in|console error|stack trace|commit|deploy|deployment)\b|\b(index\.html|app\.js|server\.js|styles?\.css|stylesheet|package\.json)\b|\b(css|stylesheet|style sheet|styling)\b|\b(debug|fix|edit|change|update|add|remove|implement|refactor|repair|patch|improve|enhance|upgrade|modernize)\b.{0,70}\b(code|script|function|file|app|website|game|repo|css|style|design|ui)\b/i.test(text);
 }
 function isWebSearchRequest(text) {
-  return /\\b(search the web|search online|look (it|this|that) up|look up|google|find online|latest|current|live|right now|as of today|today|tonight|this week|this month|recent|breaking|news|weather|forecast|temperature|score|scores|standings|schedule|fixtures|results|release date|version|update|price|prices|stock|shares|exchange rate|currency|availability|open now|traffic|election|polls|who won|when does .* release|is .* still|has .* happened|source(s)? for)\\b/i.test(text);
+  return /\b(search the web|search online|look (it|this|that) up|look up|google|find online|latest|current|live|right now|as of today|today|tonight|this week|this month|recent|breaking|news|weather|forecast|temperature|score|scores|standings|schedule|fixtures|results|release date|version|update|price|prices|stock|shares|exchange rate|currency|availability|open now|traffic|election|polls|who won|when does .* release|is .* still|has .* happened|source(s)? for|links? to)\b/i.test(text);
+}
+
+// Choose sources from the subject instead of sending every research question to a generic search.
+function buildResearchSearchPlan(text) {
+  const value = String(text || "");
+  const science = /\b(science|scientific|biology|biolog(y|ical)|cell|cells|mitochondri\w*|organell?e?s?|physics|chemistry|chemical|astronomy|space|planet|climate|ecosystem|evolution|genetics|DNA|RNA|anatomy|physiology|geology|microbiology|photosynthesis|cellular respiration|ATP|disease|medical research)\b/i.test(value);
+  const asksForVideo = /\b(youtube|youtube video|yt video|video(s)?|watch|tutorial video)\b/i.test(value);
+  const asksForLinks = /\b(link(s)?|source(s)?|website(s)?|reference(s)?)\b/i.test(value);
+
+  if (asksForVideo) {
+    return { type: "video", query: value + " site:youtube.com/watch OR site:youtu.be" };
+  }
+  if (science) {
+    return {
+      type: "science",
+      query: value + " (site:nih.gov OR site:ncbi.nlm.nih.gov OR site:nature.com OR site:science.org OR site:nasa.gov OR site:noaa.gov OR site:usgs.gov)"
+    };
+  }
+  if (asksForLinks) return { type: "links", query: value };
+  return null;
 }
 
 function extractImagePrompt(text) {
@@ -270,15 +290,17 @@ async function sendMessage(text) {
     const useEditWorkflow = Boolean(activeGithubRepo && asksForEdit);
     const useRepositoryContext = Boolean(activeGithubRepo && projectRelated);
     let webResults = [];
-    // Only run web search for requests that actually ask for current or online information.
-    // Ordinary chat should go straight to the AI instead of waiting on Google.
-    if (isWebSearchRequest(content)) {
+    const researchPlan = buildResearchSearchPlan(content);
+    // Automatically research science questions and link/video requests; keep casual chat fast.
+    if (isWebSearchRequest(content) || researchPlan) {
       try {
-        pending.querySelector(".typing").textContent = "Searching the web···";
+        pending.querySelector(".typing").textContent = researchPlan?.type === "science"
+          ? "Checking trusted science sources···"
+          : researchPlan?.type === "video" ? "Finding relevant YouTube videos···" : "Searching the web···";
         const searchResponse = await fetch(API_BASE_URL + "/api/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: content })
+          body: JSON.stringify({ query: researchPlan?.query || content })
         });
         const searchData = await searchResponse.json().catch(() => ({}));
         if (searchResponse.ok && Array.isArray(searchData.results)) {
