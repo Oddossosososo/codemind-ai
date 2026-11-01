@@ -286,9 +286,10 @@ async function sendMessage(text) {
     const endpoint = useEditWorkflow ? "/api/github/chat-edit" : "/api/chat";
     const preferenceMessages = messages.slice(useEditWorkflow ? -12 : -20).map(item => ({ ...item }));
     const preferenceContext = getPreferenceInstruction();
+    const projectMemoryContext = getProjectMemoryContext();
     const payload = useEditWorkflow
-      ? { repo: activeGithubRepo, messages: preferenceMessages, preferences: preferenceContext }
-      : { messages: preferenceMessages, preferences: preferenceContext, ...(useRepositoryContext ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) };
+      ? { repo: activeGithubRepo, messages: preferenceMessages, preferences: preferenceContext, projectMemory: projectMemoryContext }
+      : { messages: preferenceMessages, preferences: preferenceContext, projectMemory: projectMemoryContext, ...(useRepositoryContext ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) };
     let response = await fetch(API_BASE_URL + endpoint, {
       method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(payload)
     });
@@ -299,7 +300,7 @@ async function sendMessage(text) {
     if (useEditWorkflow && response.status === 404) {
       response = await fetch(API_BASE_URL + "/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ messages: messages.slice(-20), preferences: preferenceContext, ...(useRepositoryContext ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) })
+        body: JSON.stringify({ messages: messages.slice(-20), preferences: preferenceContext, projectMemory: projectMemoryContext, ...(useRepositoryContext ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) })
       });
       data = await response.json().catch(() => ({}));
       editRouteFallback = response.ok;
@@ -613,6 +614,13 @@ function readProjectMemory() {
     const items = JSON.parse(localStorage.getItem(PROJECT_MEMORY_KEY) || "[]");
     return Array.isArray(items) ? items.filter(item => item && typeof item.title === "string" && typeof item.body === "string").slice(0, 150) : [];
   } catch { return []; }
+}
+function getProjectMemoryContext() {
+  const notes = readProjectMemory().filter(item => {
+    const scope = item.repo || "General workspace";
+    return scope === "General workspace" || !activeGithubRepo || scope === activeGithubRepo;
+  }).slice(0, 8);
+  return notes.map(item => "[" + (item.repo || "General workspace") + "] " + item.title + "\n" + item.body).join("\n\n").slice(0, 8000);
 }
 function renderProjectMemory() {
   const list = document.querySelector("#memoryList");
