@@ -181,6 +181,13 @@ function extractGithubRepo(text) {
   if (!match) return "";
   return match[1] + "/" + match[2].replace(/\.git$/i, "");
 }
+function isProjectRelatedRequest(text) {
+  return /\b(my|this|the)\s+(project|repo|repository|website|web app|app|game|codebase|code|script|file|site)\b|\b(github|repository|repo|codebase|source code|javascript|typescript|html|css|node\.?js|api endpoint|function|bug in|error in|console error|stack trace|commit|deploy|deployment|backend|frontend)\b|\b(index\.html|app\.js|server\.js|styles\.css|package\.json)\b/i.test(text);
+}
+function isWebSearchRequest(text) {
+  return /\b(search the web|search online|look (it|this|that) up|look up|google|find online|latest|current price|news about|today'?s|recent updates|what happened (today|recently)|source(s)? for)\b/i.test(text);
+}
+
 async function sendMessage(text) {
   const content = text.trim();
   if (!content || busy) return;
@@ -207,14 +214,28 @@ async function sendMessage(text) {
   saveMessages(); render(); input.value = ""; resizeInput(); setBusy(true);
   const pending = document.createElement("article");
   pending.className = "message";
-  pending.innerHTML = '<div class="message-avatar">C</div><div class="message-content"><div class="message-role">CODEMIND</div><div class="message-text typing">Reading repository and thinking···</div></div>';
+  pending.innerHTML = '<div class="message-avatar">C</div><div class="message-content"><div class="message-role">CODEMIND</div><div class="message-text typing">Thinking···</div></div>';
   messagesEl.appendChild(pending);
   let chatEditResult = null;
   try {
-    const asksForEdit = /\b(fix|change|edit|update|add|remove|implement|build|create|make|write|improve|enhance|upgrade|rewrite|refactor|modify|repair|patch|optimize)\b/i.test(content);
+      const projectRelated = isProjectRelatedRequest(content);
+    const asksForEdit = projectRelated && /\b(fix|change|edit|update|add|remove|implement|build|create|make|write|improve|enhance|upgrade|rewrite|refactor|modify|repair|patch|optimize)\b/i.test(content);
     const useEditWorkflow = Boolean(activeGithubRepo && asksForEdit);
+    const useRepositoryContext = Boolean(activeGithubRepo && projectRelated);
+    let webResults = [];
+    if (isWebSearchRequest(content)) {
+      const searchResponse = await fetch(API_BASE_URL + "/api/search", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: content })
+      });
+      const searchData = await searchResponse.json().catch(() => ({}));
+      if (!searchResponse.ok) throw new Error(searchData.error || "Web search failed.");
+      webResults = Array.isArray(searchData.results) ? searchData.results : [];
+    }
     const endpoint = useEditWorkflow ? "/api/github/chat-edit" : "/api/chat";
-    const payload = useEditWorkflow ? { repo: activeGithubRepo, messages: messages.slice(-12) } : { messages: messages.slice(-20), githubRepo: activeGithubRepo };
+    const payload = useEditWorkflow
+      ? { repo: activeGithubRepo, messages: messages.slice(-12) }
+      : { messages: messages.slice(-20), ...(useRepositoryContext ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) };
     let response = await fetch(API_BASE_URL + endpoint, {
       method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(payload)
     });
@@ -225,7 +246,7 @@ async function sendMessage(text) {
     if (useEditWorkflow && response.status === 404) {
       response = await fetch(API_BASE_URL + "/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ messages: messages.slice(-20), githubRepo: activeGithubRepo })
+        body: JSON.stringify({ messages: messages.slice(-20), ...(useRepositoryContext ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) })
       });
       data = await response.json().catch(() => ({}));
       editRouteFallback = response.ok;
