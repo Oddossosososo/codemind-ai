@@ -951,44 +951,44 @@ app.post("/api/chat", async (req, res) => {
         if (creatorMatches.length === 1) {
           const level = creatorMatches[0];
           return res.json({
-            reply: "Found **" + level.name + "** by **" + level.author + "**. Level ID: **" + level.id + "**\\n\\n" +
-              level.url + "\\n\\nGDBrowser search: https://gdbrowser.com/search/" + encodeURIComponent(levelName)
+            reply: "Found **" + level.name + "** by **" + level.author + "**. Level ID: **" + level.id + "**\n\n" +
+              level.url + "\n\nGDBrowser search: https://gdbrowser.com/search/" + encodeURIComponent(levelName)
           });
         }
         if (creatorMatches.length > 1) {
           return res.json({
-            reply: "I found multiple exact matches for **" + levelName + "** by **" + requestedCreator + "**:\\n" +
-              creatorMatches.map(item => "- **" + item.name + "** — ID **" + item.id + "** — by " + item.author + " (" + item.url + ")").join("\\n")
+            reply: "I found multiple exact matches for **" + levelName + "** by **" + requestedCreator + "**:\n" +
+              creatorMatches.map(item => "- **" + item.name + "** — ID **" + item.id + "** — by " + item.author + " (" + item.url + ")").join("\n")
           });
         }
         if (requestedCreator && nameMatches.length) {
           return res.json({
-            reply: "I found **" + nameMatches.length + "** level(s) named **" + levelName + "**, but none were by **" + requestedCreator + "**. I won't substitute another creator.\\n\\nGDBrowser search: https://gdbrowser.com/search/" + encodeURIComponent(levelName) + "\\n\\nPossible creators: " +
+            reply: "I found **" + nameMatches.length + "** level(s) named **" + levelName + "**, but none were by **" + requestedCreator + "**. I won't substitute another creator.\n\nGDBrowser search: https://gdbrowser.com/search/" + encodeURIComponent(levelName) + "\n\nPossible creators: " +
               [...new Set(nameMatches.map(item => item.author))].join(", ")
           });
         }
         if (!requestedCreator && nameMatches.length === 1) {
           const level = nameMatches[0];
           return res.json({
-            reply: "The Geometry Dash level **" + level.name + "** by **" + level.author + "** has ID **" + level.id + "**.\\n\\n" +
-              level.url + "\\n\\nGDBrowser search: https://gdbrowser.com/search/" + encodeURIComponent(levelName)
+            reply: "The Geometry Dash level **" + level.name + "** by **" + level.author + "** has ID **" + level.id + "**.\n\n" +
+              level.url + "\n\nGDBrowser search: https://gdbrowser.com/search/" + encodeURIComponent(levelName)
           });
         }
         if (nameMatches.length > 1) {
           return res.json({
-            reply: "I found multiple exact matches for **" + levelName + "**:\\n" +
-              nameMatches.map(item => "- **" + item.name + "** — ID **" + item.id + "** — by " + item.author + " (" + item.url + ")").join("\\n")
+            reply: "I found multiple exact matches for **" + levelName + "**:\n" +
+              nameMatches.map(item => "- **" + item.name + "** — ID **" + item.id + "** — by " + item.author + " (" + item.url + ")").join("\n")
           });
         }
         if (matches.length) {
           return res.json({
-            reply: "I couldn't verify an exact name match for **" + levelName + "**. These are possible matches, not confirmed answers:\\n" +
-              matches.slice(0, 5).map(item => "- " + item.name + " — ID **" + item.id + "** (by " + item.author + ")").join("\\n") +
-              "\\n\\nGDBrowser search: https://gdbrowser.com/search/" + encodeURIComponent(levelName)
+            reply: "I couldn't verify an exact name match for **" + levelName + "**. These are possible matches, not confirmed answers:\n" +
+              matches.slice(0, 5).map(item => "- " + item.name + " — ID **" + item.id + "** (by " + item.author + ")").join("\n") +
+              "\n\nGDBrowser search: https://gdbrowser.com/search/" + encodeURIComponent(levelName)
           });
         }
         return res.json({
-          reply: "Boomlings didn't return a matching level for **" + levelName + "**. I won't guess its ID.\\n\\nGDBrowser search: https://gdbrowser.com/search/" + encodeURIComponent(levelName)
+          reply: "Boomlings didn't return a matching level for **" + levelName + "**. I won't guess its ID.\n\nGDBrowser search: https://gdbrowser.com/search/" + encodeURIComponent(levelName)
         });
       } catch (error) {
         console.warn("Boomlings level search failed:", error.message);
