@@ -11,3 +11,19 @@
 .chat-edit-approve:disabled{opacity:.5;cursor:wait}
 .chat-edit-status{margin-top:9px;color:#aeb7ca;font-size:10px;line-height:1.5}
 @media(max-width:600px){.active-repo-select{max-width:130px}.chat-edit-proposals{width:100%;margin-left:0}}
+
+.news-new{margin-left:auto;font:9px var(--mono);color:#9b8bd1;border:1px solid #514477;border-radius:4px;padding:2px 5px}
+.news-view{width:min(850px,calc(100% - 48px));margin:0 auto;flex:1;padding:62px 0 40px;animation:rise .3s ease both}
+.news-view[hidden]{display:none}
+.news-heading h1{font-size:clamp(42px,6vw,64px);letter-spacing:-3px;line-height:1;margin:0;font-weight:800}
+.news-heading h1 em{font-style:normal;color:var(--accent)}
+.news-heading p{font-size:12px;color:var(--muted);margin:15px 0 30px}
+.news-feature{max-width:720px;border:1px solid #39334f;border-radius:14px;padding:25px;background:linear-gradient(145deg,#171626,#10141f 70%);box-shadow:0 16px 50px #0002}
+.news-meta{display:flex;align-items:center;gap:12px;font:9px var(--mono);letter-spacing:1px;color:#818ba0}
+.news-tag{color:#c4b5fd;background:#30264a;border:1px solid #514477;border-radius:4px;padding:5px 7px}
+.news-feature h2{font-size:clamp(22px,3vw,30px);letter-spacing:-1px;line-height:1.2;margin:22px 0 12px}
+.news-feature p{max-width:600px;color:#aeb7ca;font-size:13px;line-height:1.9;margin:0}
+.news-feature p strong{color:#e9e4ff}
+.news-byline{margin-top:25px;padding-top:15px;border-top:1px solid var(--line);font:9px var(--mono);letter-spacing:1px;color:#858da2}
+.news-byline span{padding:0 6px;color:var(--accent)}
+@media(max-width:600px){.news-view{width:calc(100% - 32px);padding-top:35px}.news-feature{padding:19px}}
