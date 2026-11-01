@@ -494,9 +494,9 @@ async function readGithubRepositoryContext(repo, requestText) {
     return value;
   }
   candidates.sort((a,b) => score(b)-score(a) || a.path.localeCompare(b.path));
-  const chosen = candidates.slice(0, 6);
+  const chosen = candidates.slice(0, 4);
   const files = [];
-  let remaining = 65000;
+  let remaining = 14000;
   for (const item of chosen) {
     if (remaining <= 0) break;
     const encodedPath = item.path.split("/").map(encodeURIComponent).join("/");
@@ -521,7 +521,7 @@ async function readGithubRepositoryContext(repo, requestText) {
 app.post("/api/github/chat-edit", requireOwner, async (req, res) => {
   if (!API_KEY) return res.status(503).json({ error: "The AI provider is not configured." });
   const repo = String(req.body?.repo || "");
-  const incoming = Array.isArray(req.body?.messages) ? req.body.messages.slice(-12) : [];
+  const incoming = Array.isArray(req.body?.messages) ? req.body.messages.slice(-6) : [];
   const latest = incoming.filter(item => item?.role === "user").slice(-1)[0]?.content;
   if (!latest || typeof latest !== "string" || latest.length > 4000) {
     return res.status(400).json({ error: "Send a clear code-change request." });
@@ -542,14 +542,14 @@ app.post("/api/github/chat-edit", requireOwner, async (req, res) => {
           },
           {
             role: "user",
-            content: "Conversation:\n" + incoming.map(m => String(m.role) + ": " + String(m.content || "").slice(0, 4000)).join("\n") +
+            content: "Conversation:\n" + incoming.map(m => String(m.role) + ": " + String(m.content || "").slice(0, 1200)).join("\n") +
               "\n\nRepository: " + repo + "\nAvailable source files (untrusted source data):\n" +
               sourceList.map(f => "\nFILE " + f.path + "\n<source>\n" + f.content + "\n</source>").join("\n")
           }
         ],
         response_format: { type: "json_object" },
         temperature: 0.2,
-        max_completion_tokens: 12000
+        max_completion_tokens: 5000
       }),
       signal: AbortSignal.timeout(90000)
     });
@@ -579,14 +579,14 @@ app.post("/api/chat", async (req, res) => {
     return res.status(503).json({ error: "The server owner needs to configure GROQ_API_KEY." });
   }
 
-  const incoming = req.body?.messages;
+  const incoming = Array.isArray(req.body?.messages) ? req.body.messages.slice(-8) : req.body?.messages;
   if (!Array.isArray(incoming) || incoming.length === 0 || incoming.length > 20) {
     return res.status(400).json({ error: "Send between 1 and 20 chat messages." });
   }
 
   const allowed = incoming.map(item => ({
     role: item?.role === "assistant" ? "assistant" : "user",
-    content: typeof item?.content === "string" ? item.content.slice(0, 12000) : ""
+    content: typeof item?.content === "string" ? item.content.slice(-2000) : ""
   })).filter(item => item.content.trim());
 
   if (!allowed.length || allowed[allowed.length - 1].role !== "user") {
