@@ -912,7 +912,7 @@ app.post("/api/chat", async (req, res) => {
       console.warn("GDBrowser level lookup failed:", error.message);
       systemContent += "\n\nGD BROWSER LEVEL LOOKUP: The live lookup for ID " + gdLevelId + " failed. Be transparent and do not invent level details.";
     }
-  } else if (mentionsGeometryDash && /\b(?:id|level id)\b/i.test(latestUserMessage)) {
+  } else if ((mentionsGeometryDash || /\bwhat(?:'s| is)\s+(?:the\s+)?(?:level\s+)?id\s+(?:in|of|for)\b/i.test(latestUserMessage)) && /\b(?:id|level id)\b/i.test(latestUserMessage)) {
     const nameQuestion = latestUserMessage.match(/\bwhat(?:'s| is)\s+(?:the\s+)?(?:level\s+)?id\s+(?:in|of|for)\s+([^?!.\n]{2,100})/i)
       || latestUserMessage.match(/\b(?:find|look up|search(?: for)?)\s+(?:the\s+)?(?:GD\s+)?level\s+([^?!.\n]{2,100})/i);
     const levelName = nameQuestion?.[1]?.replace(/\b(?:in geometry dash|in gd|on geometry dash)\s*$/i, "").trim();
