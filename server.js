@@ -1333,11 +1333,27 @@ app.post("/api/chat", async (req, res) => {
 
     const result = await upstream.json().catch(() => ({}));
     if (!upstream.ok) {
-      console.error("Groq API error:", upstream.status, result?.error?.message || "Unknown error");
-      return res.status(upstream.status === 429 ? 429 : 502).json({
-        error: upstream.status === 429
-          ? "The model rate limit was reached. Try again later."
-          : "The AI provider returned an error. Check the model and API configuration."
+      const providerMessage = String(result?.error?.message || "Unknown provider error").slice(0, 300);
+      console.error("Groq API error:", upstream.status, providerMessage);
+      if (upstream.status === 429) {
+        const retryAfter = upstream.headers.get("retry-after");
+        const requestReset = upstream.headers.get("x-ratelimit-reset-requests");
+        const tokenReset = upstream.headers.get("x-ratelimit-reset-tokens");
+        const resetHint = retryAfter
+          ? " Retry after " + retryAfter + "."
+          : (requestReset || tokenReset)
+            ? " Reset information — requests: " + (requestReset || "not supplied") + "; tokens: " + (tokenReset || "not supplied") + "."
+            : " Wait briefly, then retry; if it continues, check your Groq usage limits.";
+        return res.status(429).json({
+          error: "Groq is rate-limiting this request." + resetHint,
+          code: "GROQ_RATE_LIMIT",
+          retryAfter: retryAfter || null,
+          resetRequests: requestReset || null,
+          resetTokens: tokenReset || null
+        });
+      }
+      return res.status(502).json({
+        error: "The AI provider returned an error. Check the model and API configuration."
       });
     }
 
