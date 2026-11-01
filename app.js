@@ -138,21 +138,25 @@ async function sendMessage(text) {
   pending.innerHTML = '<div class="message-avatar">C</div><div class="message-content"><div class="message-role">CODEMIND</div><div class="message-text typing">Thinking···</div></div>';
   messagesEl.appendChild(pending);
   try {
-    const response = await fetch(`${API_BASE_URL}/api/chat`, {
+    const asksForEdit = /\\b(fix|change|edit|update|add|remove|implement|build|create|rewrite|refactor|modify|repair)\\b/i.test(content);
+    const useEditWorkflow = Boolean(activeGithubRepo && asksForEdit);
+    const endpoint = useEditWorkflow ? "/api/github/chat-edit" : "/api/chat";
+    const payload = useEditWorkflow
+      ? { repo: activeGithubRepo, messages: messages.slice(-12) }
+      : { messages: messages.slice(-20), githubFile: activeGithubFile, githubRepo: activeGithubRepo };
+    const response = await fetch(API_BASE_URL + endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({
-        messages: messages.slice(-20),
-        githubFile: activeGithubFile,
-        githubRepo: activeGithubRepo
-      })
+      body: JSON.stringify(payload)
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || "The server couldn't answer. Check your setup.");
     if (typeof data.reply !== "string" || !data.reply.trim()) throw new Error("The model returned an empty response.");
     messages.push({ role: "assistant", content: data.reply.trim() });
     saveMessages();
+    render();
+    if (useEditWorkflow && data.edits?.length) renderChatEditProposals(data.edits, activeGithubRepo);
   } catch (error) {
     messages.push({ role: "assistant", content: "I couldn't connect: " + error.message + "\n\nCheck that the CodeMind backend is deployed and GROQ_API_KEY is configured." });
     saveMessages();
