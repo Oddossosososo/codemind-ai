@@ -24,3 +24,16 @@
 
 .attach-file-button{display:block;margin:14px;padding:10px 13px;border:1px solid #514477;border-radius:8px;background:#211c35;color:#eee9ff;font:600 11px var(--sans);cursor:pointer}
 .attach-file-button:hover{background:#30264b}
+
+.github-edit-box{border-top:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:10px;background:#10131d}
+.github-edit-box>strong{font-size:12px;color:#e9e4ff}
+.github-edit-instruction,.github-proposal-editor,.github-commit-message{width:100%;border:1px solid #34394d;background:#090c13;color:var(--text);border-radius:8px;padding:11px;font:11px/1.6 var(--sans);outline:none;resize:vertical}
+.github-edit-instruction:focus,.github-proposal-editor:focus,.github-commit-message:focus{border-color:#7765ad}
+.github-proposal-editor{min-height:260px;max-height:60vh;font:11px/1.65 var(--mono);white-space:pre;tab-size:2}
+.github-proposal-status{font-size:11px;line-height:1.6;color:#aeb7ca;white-space:pre-wrap}
+.github-propose-button,.github-commit-button{align-self:flex-start;border:1px solid #514477;background:#211c35;color:#eee9ff;border-radius:8px;padding:10px 14px;font:600 11px var(--sans);cursor:pointer}
+.github-commit-button{background:#19352f;border-color:#316b5d;color:#b8f4e4}
+.github-propose-button:disabled,.github-commit-button:disabled{opacity:.45;cursor:wait}
+.github-commit-row{display:flex;gap:9px;align-items:center}
+.github-commit-message{flex:1;min-width:0}
+@media(max-width:600px){.github-commit-row{align-items:stretch;flex-direction:column}.github-propose-button,.github-commit-button{width:100%}}
