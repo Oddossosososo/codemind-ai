@@ -1005,38 +1005,38 @@ app.post("/api/chat", async (req, res) => {
   } else {
     // Detect level + creator anywhere in the user's message, including pasted instructions/transcripts.
     // This makes requests like '"tidal wave" by creator "onilink"' work even when followed by extra text.
-    const userText = userMessages.join("\\n");
+    const userText = userMessages.join("\n");
     const quotedLevelCreator = [...userMessages].reverse().map(message =>
-      message.match(/["“']([^"”']{2,80})["”']\\s+by\\s+(?:the\\s+creator\\s+)?["“']?([A-Za-z0-9_-]{2,32})/i)
+      message.match(/["“']([^"”']{2,80})["”']\s+by\s+(?:the\s+creator\s+)?["“']?([A-Za-z0-9_-]{2,32})/i)
     ).find(Boolean);
     const plainLevelCreator = [...userMessages].reverse().map(message =>
-      message.match(/\\b(?:find|search(?:\\s+for)?|look\\s+up)?\\s*(?:the\\s+)?(?:GD\\s+)?level\\s+(.{2,80}?)\\s+by\\s+([A-Za-z0-9_-]{2,32})(?=$|[\\s.,!?])/i)
+      message.match(/\b(?:find|search(?:\s+for)?|look\s+up)?\s*(?:the\s+)?(?:GD\s+)?level\s+(.{2,80}?)\s+by\s+([A-Za-z0-9_-]{2,32})(?=$|[\s.,!?])/i)
     ).find(Boolean);
     const pairMatch = quotedLevelCreator || plainLevelCreator;
     const levelRequestText = pairMatch ? "" : ([...userMessages].reverse().find(message =>
-      /\\bby\\s+[A-Za-z0-9_-]{2,32}\\b/i.test(message) ||
-      /\\b(?:find|look\\s+for|look\\s+up|search|what\\s+id|level\\s+id)\\b/i.test(message)
+      /\bby\s+[A-Za-z0-9_-]{2,32}\b/i.test(message) ||
+      /\b(?:find|look\s+for|look\s+up|search|what\s+id|level\s+id)\b/i.test(message)
     ) || latestUserMessage);
-    const asksForLevelId = /\\bwhat\\s+id\\s+is\\b|\\bwhat(?:'s|\\s+is)\\s+(?:the\\s+)?(?:level\\s+)?id\\s+(?:in|of|for)\\b|\\b(?:level\\s+)?id\\s+(?:of|for)\\b|\\b(?:find|look\\s+for|look\\s+up|search(?:\\s+for)?)\\s+(?:the\\s+)?(?:GD\\s+)?level\\s+/i.test(levelRequestText);
+    const asksForLevelId = /\bwhat\s+id\s+is\b|\bwhat(?:'s|\s+is)\s+(?:the\s+)?(?:level\s+)?id\s+(?:in|of|for)\b|\b(?:level\s+)?id\s+(?:of|for)\b|\b(?:find|look\s+for|look\s+up|search(?:\s+for)?)\s+(?:the\s+)?(?:GD\s+)?level\s+/i.test(levelRequestText);
     const creatorMatch = pairMatch
       ? { 1: pairMatch[2], index: 0 }
-      : levelRequestText.match(/\\bby\\s+([A-Za-z0-9_-]{2,32})(?=$|[\\s.,!?])/i);
+      : levelRequestText.match(/\bby\s+([A-Za-z0-9_-]{2,32})(?=$|[\s.,!?])/i);
     const requestedCreator = pairMatch ? pairMatch[2] : (creatorMatch?.[1] || null);
     const searchText = pairMatch
       ? pairMatch[1].trim()
       : (requestedCreator ? levelRequestText.slice(0, creatorMatch.index).trim() : levelRequestText);
     const nameQuestion = pairMatch
       ? [searchText, searchText]
-      : (searchText.match(/\\bwhat\\s+id\\s+is\\s+(.+?)\\s*$/i)
-        || searchText.match(/\\bwhat(?:'s|\\s+is)\\s+(?:the\\s+)?(?:level\\s+)?id\\s+(?:in|of|for)\\s+(.+?)\\s*$/i)
-        || searchText.match(/\\b(?:level\\s+)?id\\s+(?:of|for)\\s+(.+?)\\s*$/i)
-        || searchText.match(/\\b(?:find|look\\s+for|look\\s+up|search(?:\\s+for)?)\\s+(?:the\\s+)?(?:GD\\s+)?(?:level\\s+)?(.+?)\\s*$/i)
+      : (searchText.match(/\bwhat\s+id\s+is\s+(.+?)\s*$/i)
+        || searchText.match(/\bwhat(?:'s|\s+is)\s+(?:the\s+)?(?:level\s+)?id\s+(?:in|of|for)\s+(.+?)\s*$/i)
+        || searchText.match(/\b(?:level\s+)?id\s+(?:of|for)\s+(.+?)\s*$/i)
+        || searchText.match(/\b(?:find|look\s+for|look\s+up|search(?:\s+for)?)\s+(?:the\s+)?(?:GD\s+)?(?:level\s+)?(.+?)\s*$/i)
         || (requestedCreator ? [searchText, searchText] : null));
     const levelName = nameQuestion?.[1]
-      ?.replace(/^\\s*(?:(?:please\\s+)?(?:find|search(?:\\s+for)?|look\\s+up)\\s+)?(?:the\\s+)?(?:GD\\s+)?level\\s+/i, "")
+      ?.replace(/^\s*(?:(?:please\s+)?(?:find|search(?:\s+for)?|look\s+up)\s+)?(?:the\s+)?(?:GD\s+)?level\s+/i, "")
       .replace(/^["“']|["”']$/g, "")
-      .replace(/\\b(?:in geometry dash|in gd|on geometry dash)\\s*$/i, "")
-      .replace(/^the\\s+/i, "")
+      .replace(/\b(?:in geometry dash|in gd|on geometry dash)\s*$/i, "")
+      .replace(/^the\s+/i, "")
       .replace(/[?.!]+$/, "")
       .trim();
     if ((mentionsGeometryDash || asksForLevelId || requestedCreator) && levelName) {
