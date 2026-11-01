@@ -1245,7 +1245,7 @@ app.post("/api/chat", async (req, res) => {
             note: "Ranked only among levels returned by GDBrowser search; not guaranteed to include every upload."
           };
           label = "Most-liked Geometry Dash levels found for " + player;
-          sourceUrl = "https://gdbrowser.com/search/" + encodeURIComponent(player);
+          sourceUrl = "https://gdbrowser.com/levels/search?name=" + encodeURIComponent(player);
         } else if (profileMatch) {
           const player = profileMatch[1];
           data = await fetchGDBrowserJSON("profile/" + encodeURIComponent(player), 60000);
@@ -1333,7 +1333,7 @@ app.post("/api/chat", async (req, res) => {
           ? nameMatches.filter(item => item.author.trim().toLowerCase() === requestedCreator.toLowerCase())
           : nameMatches;
 
-        const searchUrl = "https://gdbrowser.com/search/" + encodeURIComponent(levelName);
+        const searchUrl = "https://gdbrowser.com/levels/search?name=" + encodeURIComponent(levelName);
         const formatLevel = item =>
           "- **" + item.name + "** — ID **" + item.id + "** — by " + item.author +
           " (" + (item.url || ("https://gdbrowser.com/level/" + encodeURIComponent(item.id))) + ")";
@@ -1394,7 +1394,7 @@ app.post("/api/chat", async (req, res) => {
         console.warn("GDBrowser level search failed:", error.message);
         return res.json({
           reply: "The GDBrowser level search is currently unavailable: " + error.message +
-            "\n\nTry again later or open https://gdbrowser.com/search/" + encodeURIComponent(levelName) + "."
+            "\n\nTry again later or open https://gdbrowser.com/levels/search?name=" + encodeURIComponent(levelName) + "."
         });
       }
     }
