@@ -1103,6 +1103,13 @@ renderProjectMemory();
   let listening = false;
   let finalTranscript = "";
   let baseText = "";
+  let silenceTimer = null;
+  let autoSubmitRequested = false;
+
+  function clearSilenceTimer() {
+    if (silenceTimer) window.clearTimeout(silenceTimer);
+    silenceTimer = null;
+  }
 
   function setListening(active) {
     listening = active;
@@ -1116,6 +1123,8 @@ renderProjectMemory();
 
   voiceButton.addEventListener("click", () => {
     if (listening) {
+      clearSilenceTimer();
+      autoSubmitRequested = false;
       recognition.stop();
       return;
     }
@@ -1149,11 +1158,22 @@ renderProjectMemory();
       if (event.results[i].isFinal) finalTranscript += phrase;
       else interim += phrase;
     }
-    const spoken = finalTranscript.trim();
+    const spoken = [finalTranscript.trim(), interim.trim()].filter(Boolean).join(" ");
     input.value = [baseText, spoken].filter(Boolean).join(baseText && spoken ? " " : "");
     if (interim) voiceStatus.textContent = "HEARING: " + interim.trim().slice(0, 28);
     else voiceStatus.textContent = "VOICE CAPTURED";
     input.dispatchEvent(new Event("input", { bubbles: true }));
+
+    // Automatically send after 900ms without another speech result.
+    clearSilenceTimer();
+    if (spoken.trim()) {
+      silenceTimer = window.setTimeout(() => {
+        if (!listening || !input.value.trim() || busy) return;
+        autoSubmitRequested = true;
+        voiceStatus.textContent = "SENDING…";
+        recognition.stop();
+      }, 900);
+    }
   };
 
   recognition.onerror = event => {
@@ -1169,7 +1189,14 @@ renderProjectMemory();
   };
 
   recognition.onend = () => {
+    clearSilenceTimer();
     setListening(false);
+    if (autoSubmitRequested) {
+      autoSubmitRequested = false;
+      const transcript = input.value.trim();
+      if (transcript) sendMessage(transcript);
+      return;
+    }
     if (finalTranscript.trim()) voiceStatus.textContent = "VOICE CAPTURED";
     else if (!voiceStatus.classList.contains("is-error")) voiceStatus.textContent = "VOICE READY";
   };
