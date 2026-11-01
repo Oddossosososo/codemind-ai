@@ -223,15 +223,25 @@ async function sendMessage(text) {
     const useEditWorkflow = Boolean(activeGithubRepo && asksForEdit);
     const useRepositoryContext = Boolean(activeGithubRepo && projectRelated);
     let webResults = [];
-    if (isWebSearchRequest(content)) {
+    // Search every user message, not only prompts containing "search" or "latest".
+    try {
+      pending.querySelector(".typing").textContent = "Searching the web···";
       const searchResponse = await fetch(API_BASE_URL + "/api/search", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: content })
       });
       const searchData = await searchResponse.json().catch(() => ({}));
-      if (!searchResponse.ok) throw new Error(searchData.error || "Web search failed.");
-      webResults = Array.isArray(searchData.results) ? searchData.results : [];
+      if (searchResponse.ok && Array.isArray(searchData.results)) {
+        webResults = searchData.results;
+      } else {
+        console.warn("CodeMind web search unavailable:", searchData.error || searchResponse.status);
+      }
+    } catch (searchError) {
+      // Keep normal chat available if the search provider is temporarily down.
+      console.warn("CodeMind web search failed:", searchError.message);
     }
+    pending.querySelector(".typing").textContent = "Thinking···";
     const endpoint = useEditWorkflow ? "/api/github/chat-edit" : "/api/chat";
     const payload = useEditWorkflow
       ? { repo: activeGithubRepo, messages: messages.slice(-12) }
