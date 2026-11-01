@@ -11,7 +11,7 @@ const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 const GITHUB_APP_ID = process.env.GITHUB_APP_ID;
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
-const GITHUB_PRIVATE_KEY = (process.env.GITHUB_PRIVATE_KEY || "").replace(/\\n/g, "\n");
+const GITHUB_PRIVATE_KEY = (process.env.GITHUB_PRIVATE_KEY || "").replace(/\n/g, "\n");
 const GITHUB_OWNER = (process.env.GITHUB_OWNER || "Oddossosososo").toLowerCase();
 const GITHUB_CALLBACK_URL = process.env.GITHUB_CALLBACK_URL ||
   "https://codemind-ai-l8ix.onrender.com/auth/github/callback";
@@ -917,10 +917,10 @@ app.post("/api/chat", async (req, res) => {
   } else {
     const asksForLevelId = /\bwhat\s+id\s+is\b|\bwhat(?:'s|\s+is)\s+(?:the\s+)?(?:level\s+)?id\s+(?:in|of|for)\b|\b(?:level\s+)?id\s+(?:of|for)\b|\b(?:find|look up|search(?: for)?)\s+(?:the\s+)?(?:GD\s+)?level\s+/i.test(latestUserMessage);
     if ((mentionsGeometryDash || asksForLevelId) && asksForLevelId) {
-      const nameQuestion = latestUserMessage.match(/\bwhat\s+id\s+is\s+([^?!.\\n]{2,100})/i)
-        || latestUserMessage.match(/\bwhat(?:'s|\s+is)\s+(?:the\s+)?(?:level\s+)?id\s+(?:in|of|for)\s+([^?!.\\n]{2,100})/i)
-        || latestUserMessage.match(/\b(?:level\s+)?id\s+(?:of|for)\s+([^?!.\\n]{2,100})/i)
-        || latestUserMessage.match(/\b(?:find|look up|search(?: for)?)\s+(?:the\s+)?(?:GD\s+)?level\s+([^?!.\\n]{2,100})/i);
+      const nameQuestion = latestUserMessage.match(/\bwhat\s+id\s+is\s+([^?!.\n]{2,100})/i)
+        || latestUserMessage.match(/\bwhat(?:'s|\s+is)\s+(?:the\s+)?(?:level\s+)?id\s+(?:in|of|for)\s+([^?!.\n]{2,100})/i)
+        || latestUserMessage.match(/\b(?:level\s+)?id\s+(?:of|for)\s+([^?!.\n]{2,100})/i)
+        || latestUserMessage.match(/\b(?:find|look up|search(?: for)?)\s+(?:the\s+)?(?:GD\s+)?level\s+([^?!.\n]{2,100})/i);
       const levelName = nameQuestion?.[1]
         ?.replace(/\b(?:in geometry dash|in gd|on geometry dash)\s*$/i, "")
         .replace(/^the\s+/i, "")
