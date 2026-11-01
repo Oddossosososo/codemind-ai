@@ -195,9 +195,34 @@ function isWebSearchRequest(text) {
   return /\\b(search the web|search online|look (it|this|that) up|look up|google|find online|latest|current|live|right now|as of today|today|tonight|this week|this month|recent|breaking|news|weather|forecast|temperature|score|scores|standings|schedule|fixtures|results|release date|version|update|price|prices|stock|shares|exchange rate|currency|availability|open now|traffic|election|polls|who won|when does .* release|is .* still|has .* happened|source(s)? for)\\b/i.test(text);
 }
 
+function extractImagePrompt(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const hasNanoBanana = /\bnano[ -]?banana(?:\s*2)?(?:\s+lite)?\b/i.test(raw);
+  const hasImageAction = /\b(?:make|create|draw|illustrate|generate|render)\b/i.test(raw);
+  const explicitImageRequest = /\b(?:draw|illustrate)\b/i.test(raw) ||
+    /\b(?:make|create|generate|render)\s+(?:me\s+)?(?:an?\s+)?(?:image|picture|photo|illustration|artwork)\b/i.test(raw);
+  if (!(explicitImageRequest || (hasNanoBanana && hasImageAction))) return "";
+
+  return raw
+    .replace(/^\s*(?:please\s+)?(?:can you\s+)?(?:make|create|draw|illustrate|generate|render)\s+(?:me\s+)?/i, "")
+    .replace(/\b(?:with|using)\s+nano[ -]?banana(?:\s*2)?(?:\s+lite)?\b/gi, "")
+    .replace(/^\s*nano[ -]?banana(?:\s*2)?(?:\s+lite)?\s*[:,-]?\s*/i, "")
+    .replace(/^\s*(?:an?|the)\s+(?:image|picture|photo|illustration|artwork)\s+of\s+/i, "")
+    .replace(/\s+/g, " ")
+    .trim() || raw;
+}
+
 async function sendMessage(text) {
   const content = text.trim();
   if (!content || busy) return;
+  const imagePrompt = extractImagePrompt(content);
+  if (imagePrompt) {
+    input.value = "";
+    resizeInput();
+    await generateImage(imagePrompt);
+    return;
+  }
   const linkedRepo = extractGithubRepo(content);
   if (linkedRepo) {
     try {
@@ -290,6 +315,7 @@ async function generateImage(prompt) {
     if (!content) showToast("Describe the image you want first.");
     return;
   }
+  setBusy(true);
   imageButton.disabled = true;
   imageButton.textContent = "Generating…";
   messages.push({ role: "user", content: "Generate an image: " + content });
@@ -310,7 +336,11 @@ async function generateImage(prompt) {
     if (typeof data.imageUrl !== "string" || !/^https:\/\//i.test(data.imageUrl)) {
       throw new Error("The image provider returned no usable image URL.");
     }
-    messages.push({ role: "assistant", content: "Here's your generated image.", imageUrl: data.imageUrl });
+    const remaining = Number.isInteger(data.remainingToday) ? data.remainingToday : null;
+    const imageMessage = remaining === null
+      ? "Here's your generated image."
+      : "Here's your generated image. " + remaining + " free " + (remaining === 1 ? "image" : "images") + " remaining today.";
+    messages.push({ role: "assistant", content: imageMessage, imageUrl: data.imageUrl });
     saveMessages();
   } catch (error) {
     messages.push({ role: "assistant", content: "Image generation failed: " + error.message });
@@ -318,6 +348,7 @@ async function generateImage(prompt) {
   } finally {
     imageButton.disabled = false;
     imageButton.textContent = "✧ Imagine";
+    setBusy(false);
     render();
     input.focus();
   }
