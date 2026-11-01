@@ -556,3 +556,128 @@ render();
   });
   paintProfile();
 })();
+
+
+/* Shared public live room. All participants see all messages in this room. */
+(function initSharedLiveChat() {
+  const button = document.querySelector("#guestInboxButton");
+  if (!button) return;
+  const API = API_BASE_URL + "/api/live-chat";
+  const USER_KEY = "codemind-account-username-v1";
+  const ID_KEY = "codemind-live-chat-guest-id-v1";
+  let guestId = localStorage.getItem(ID_KEY);
+  if (!guestId) {
+    guestId = (crypto.randomUUID ? crypto.randomUUID() : "guest_" + Math.random().toString(36).slice(2) + Date.now().toString(36)).replace(/[^a-zA-Z0-9_-]/g, "");
+    localStorage.setItem(ID_KEY, guestId);
+  }
+  let poller = null;
+  let lastRendered = "";
+  let sending = false;
+
+  function username() {
+    return (localStorage.getItem(USER_KEY) || "Guest").trim().slice(0, 24) || "Guest";
+  }
+  function closeRoom() {
+    if (poller) clearInterval(poller);
+    poller = null;
+    document.querySelector("#liveRoomOverlay")?.remove();
+    lastRendered = "";
+  }
+  function renderMessages(messages) {
+    const list = document.querySelector("#liveRoomMessages");
+    const count = document.querySelector("#liveRoomCount");
+    if (!list) return;
+    const participants = new Set(messages.map(item => item.guestId));
+    if (count) count.textContent = participants.size + (participants.size === 1 ? " person here" : " people here");
+    const signature = messages.map(item => item.id).join(",");
+    if (signature === lastRendered) return;
+    const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 90;
+    lastRendered = signature;
+    list.replaceChildren();
+    if (!messages.length) {
+      const empty = document.createElement("div");
+      empty.className = "live-room-empty";
+      empty.textContent = "No messages yet. Start the conversation!";
+      list.append(empty);
+    }
+    messages.forEach(item => {
+      const card = document.createElement("article");
+      card.className = "live-room-message" + (item.guestId === guestId ? " mine" : "");
+      const head = document.createElement("div");
+      head.className = "live-room-message-head";
+      const name = document.createElement("strong");
+      name.textContent = item.username || "Guest";
+      const time = document.createElement("time");
+      time.textContent = new Date(item.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const body = document.createElement("p");
+      body.textContent = item.message;
+      head.append(name, time);
+      card.append(head, body);
+      list.append(card);
+    });
+    if (nearBottom) list.scrollTop = list.scrollHeight;
+  }
+  async function refresh() {
+    try {
+      const response = await fetch(API, { cache: "no-store" });
+      if (!response.ok) throw new Error("Live chat is unavailable.");
+      const data = await response.json();
+      renderMessages(Array.isArray(data.messages) ? data.messages : []);
+    } catch (error) {
+      const count = document.querySelector("#liveRoomCount");
+      if (count) count.textContent = "Reconnecting…";
+    }
+  }
+  async function send() {
+    const field = document.querySelector("#liveRoomInput");
+    const submit = document.querySelector("#liveRoomSend");
+    const message = field?.value.trim();
+    if (!message || sending) return;
+    sending = true;
+    if (submit) submit.disabled = true;
+    try {
+      const response = await fetch(API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ guestId, username: username(), message })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Couldn't send message.");
+      field.value = "";
+      await refresh();
+      field.focus();
+    } catch (error) {
+      if (typeof showToast === "function") showToast(error.message);
+    } finally {
+      sending = false;
+      if (submit) submit.disabled = false;
+    }
+  }
+  function openRoom() {
+    if (document.querySelector("#liveRoomOverlay")) return;
+    const overlay = document.createElement("div");
+    overlay.id = "liveRoomOverlay";
+    overlay.className = "live-room-overlay";
+    overlay.innerHTML = `
+      <section class="live-room-panel" role="dialog" aria-modal="true" aria-labelledby="liveRoomTitle">
+        <header class="live-room-header">
+          <div><div class="live-room-kicker">OPEN COMMUNITY</div><h2 id="liveRoomTitle">Live conversations</h2><span id="liveRoomCount">Connecting…</span></div>
+          <button type="button" class="live-room-close" aria-label="Close live chat">×</button>
+        </header>
+        <p class="live-room-notice">Public room: everyone who joins, including <strong>myfoodishere</strong>, can read and reply to every message. Don't share private information.</p>
+        <div class="live-room-messages" id="liveRoomMessages" aria-live="polite"></div>
+        <form class="live-room-composer" id="liveRoomForm">
+          <input id="liveRoomInput" maxlength="700" autocomplete="off" placeholder="Message everyone…" aria-label="Live chat message">
+          <button id="liveRoomSend" type="submit">Send</button>
+        </form>
+      </section>`;
+    document.body.append(overlay);
+    overlay.querySelector(".live-room-close").addEventListener("click", closeRoom);
+    overlay.addEventListener("click", event => { if (event.target === overlay) closeRoom(); });
+    overlay.querySelector("#liveRoomForm").addEventListener("submit", event => { event.preventDefault(); send(); });
+    overlay.querySelector("#liveRoomInput").focus();
+    refresh();
+    poller = setInterval(refresh, 2500);
+  }
+  button.addEventListener("click", openRoom);
+})();
