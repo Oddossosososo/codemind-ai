@@ -10,6 +10,16 @@ const toast = document.querySelector("#toast");
 const STORAGE_KEY = "codemind-chat-v1";
 const API_BASE_URL = "https://codemind-ai-l8ix.onrender.com";
 let messages = loadMessages();
+// Restore the repository from the conversation if an older chat predates repo persistence.
+if (!activeGithubRepo) {
+  const previousRepoMessage = [...messages].reverse().find(item =>
+    item?.role === "user" && extractGithubRepo(item.content)
+  );
+  if (previousRepoMessage) {
+    activeGithubRepo = extractGithubRepo(previousRepoMessage.content);
+    localStorage.setItem(REPO_STORAGE_KEY, activeGithubRepo);
+  }
+}
 let busy = false;
 let activeGithubFile = null;
 
@@ -162,7 +172,7 @@ async function sendMessage(text) {
       method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(payload)
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error || "The server couldn't answer. Check your setup.");
+    if (!response.ok) throw new Error(data.error || `Backend request failed (HTTP ${response.status}) at ${endpoint}. Check the Render service and its logs.`);
     if (typeof data.reply !== "string" || !data.reply.trim()) throw new Error("The model returned an empty response.");
     messages.push({ role: "assistant", content: data.reply.trim() }); saveMessages();
     chatEditResult = useEditWorkflow && data.edits?.length ? data.edits : null;
@@ -250,5 +260,14 @@ if (startupParams.get("github") === "connected") {
     const pendingMessage = localStorage.getItem("codemind-pending-github-message-v1");
     if (pendingMessage) { localStorage.removeItem("codemind-pending-github-message-v1"); sendMessage(pendingMessage); }
   }).catch(error => showToast(error.message));
-} else { loadRepositories().catch(() => {}); }
+} else {
+  loadRepositories().catch(error => {
+    // A saved repository URL means the user expects this conversation to stay connected.
+    if (error.status === 401 && activeGithubRepo) {
+      window.location.href = API_BASE_URL + "/auth/github";
+      return;
+    }
+    showToast("GitHub connection unavailable: " + (error.message || "Check the backend deployment."));
+  });
+}
 render();
