@@ -151,6 +151,17 @@ async function githubFetch(path) {
   if (!response.ok) throw new Error(data.error || "GitHub request failed.");
   return data;
 }
+async function githubPost(path, body) {
+  const response = await fetch(API_BASE_URL + path, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "GitHub request failed.");
+  return data;
+}
 async function loadGithubStatus() {
   githubStatus.textContent = "Checking GitHub connection…";
   try {
@@ -201,7 +212,94 @@ document.querySelector("#fileForm").addEventListener("submit", async event => {
       showToast("Attached " + data.path + " to your next messages.");
       input.focus();
     });
-    fileViewer.replaceChildren(title, pre, attachButton);
+    const editBox = document.createElement("section");
+    editBox.className = "github-edit-box";
+    const editHeading = document.createElement("strong");
+    editHeading.textContent = "Ask CodeMind to edit this file";
+    const instruction = document.createElement("textarea");
+    instruction.className = "github-edit-instruction";
+    instruction.rows = 2;
+    instruction.placeholder = "Example: Add a dark mode toggle without changing existing features.";
+    const proposeButton = document.createElement("button");
+    proposeButton.type = "button";
+    proposeButton.className = "github-propose-button";
+    proposeButton.textContent = "✦ Generate edit";
+    const proposalStatus = document.createElement("div");
+    proposalStatus.className = "github-proposal-status";
+    const proposalEditor = document.createElement("textarea");
+    proposalEditor.className = "github-proposal-editor";
+    proposalEditor.spellcheck = false;
+    proposalEditor.hidden = true;
+    const commitRow = document.createElement("div");
+    commitRow.className = "github-commit-row";
+    const commitMessage = document.createElement("input");
+    commitMessage.className = "github-commit-message";
+    commitMessage.placeholder = "Commit message";
+    commitMessage.value = "Update " + data.path;
+    const commitButton = document.createElement("button");
+    commitButton.type = "button";
+    commitButton.className = "github-commit-button";
+    commitButton.textContent = "Approve & commit";
+    commitButton.hidden = true;
+    commitRow.append(commitMessage, commitButton);
+    editBox.append(editHeading, instruction, proposeButton, proposalStatus, proposalEditor, commitRow);
+
+    let pendingProposal = null;
+    proposeButton.addEventListener("click", async () => {
+      const request = instruction.value.trim();
+      if (!request) return showToast("Describe the change you want CodeMind to make.");
+      proposeButton.disabled = true;
+      proposeButton.textContent = "Generating…";
+      proposalStatus.textContent = "CodeMind is reading the current file and preparing a proposed replacement.";
+      proposalEditor.hidden = true;
+      commitButton.hidden = true;
+      try {
+        pendingProposal = await githubPost("/api/github/propose-edit", {
+          repo,
+          path: data.path,
+          instruction: request
+        });
+        proposalEditor.value = pendingProposal.content;
+        proposalEditor.hidden = false;
+        commitButton.hidden = false;
+        proposalStatus.textContent = pendingProposal.summary + " Review and edit the proposed code below before approving.";
+        commitButton.disabled = pendingProposal.content === pendingProposal.original;
+      } catch (error) {
+        proposalStatus.textContent = error.message;
+      } finally {
+        proposeButton.disabled = false;
+        proposeButton.textContent = "✦ Generate edit";
+      }
+    });
+
+    commitButton.addEventListener("click", async () => {
+      if (!pendingProposal) return;
+      if (!window.confirm("Commit this reviewed file to " + repo + " on its default branch?")) return;
+      commitButton.disabled = true;
+      commitButton.textContent = "Committing…";
+      try {
+        const result = await githubPost("/api/github/commit-file", {
+          repo,
+          path: data.path,
+          sha: pendingProposal.sha,
+          content: proposalEditor.value,
+          message: commitMessage.value.trim() || ("Update " + data.path)
+        });
+        proposalStatus.textContent = "Committed successfully: " + result.path;
+        commitButton.textContent = "Committed ✓";
+        showToast("Changes committed to GitHub.");
+        const refreshed = await githubFetch("/api/github/file?repo=" + encodeURIComponent(repo) + "&path=" + encodeURIComponent(data.path));
+        code.textContent = refreshed.content;
+        pendingProposal = null;
+        commitButton.hidden = true;
+      } catch (error) {
+        proposalStatus.textContent = error.message;
+        commitButton.disabled = false;
+        commitButton.textContent = "Approve & commit";
+      }
+    });
+
+    fileViewer.replaceChildren(title, pre, attachButton, editBox);
   } catch (error) {
     fileViewer.textContent = error.message;
   }
