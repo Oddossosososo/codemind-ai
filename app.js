@@ -137,7 +137,7 @@ function showChatPanel() {
   chatArea.hidden = false;
   document.querySelector(".composer-wrap").hidden = false;
   githubButton.classList.remove("active");
-  document.querySelector(".side-link:first-of-type")?.classList.add("active");
+  document.querySelector(".side-link:not(#githubButton)")?.classList.add("active");
 }
 async function githubFetch(path) {
   const response = await fetch(API_BASE_URL + path, { credentials: "include" });
