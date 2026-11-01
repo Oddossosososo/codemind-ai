@@ -102,9 +102,9 @@ function render() {
   welcome.hidden = messages.length > 0;
   messagesEl.innerHTML = messages.map(message => `
     <article class="message ${message.role === "user" ? "user" : "assistant"}">
-      <div class="message-avatar">${message.role === "user" ? "Y" : "C"}</div>
+      <div class="message-avatar">${message.role === "user" ? "Y" : "G"}</div>
       <div class="message-content">
-        <div class="message-role">${message.role === "user" ? "YOU" : "CODEMIND"}</div>
+        <div class="message-role">${message.role === "user" ? "YOU" : "GYATTGPT"}</div>
         <div class="message-text">${formatText(message.content)}</div>
       </div>
     </article>`).join("");
@@ -121,7 +121,7 @@ function renderChatEditProposals(edits, repo) {
   const panel = document.createElement("section");
   panel.className = "chat-edit-proposals";
   const heading = document.createElement("strong");
-  heading.textContent = "CodeMind prepared " + edits.length + " file change(s)";
+  heading.textContent = "GyattGPT prepared " + edits.length + " file change(s)";
   const note = document.createElement("p");
   note.textContent = "Review the code below. GitHub is unchanged until you approve.";
   panel.append(heading, note);
@@ -158,13 +158,13 @@ function renderChatEditProposals(edits, repo) {
         await githubPost("/api/github/commit-file", {
           repo, path: entry.edit.path, sha: entry.edit.sha,
           content: entry.editor.value,
-          message: "Update " + entry.edit.path + " via CodeMind"
+          message: "Update " + entry.edit.path + " via GyattGPT"
         });
         completed++;
       }
       status.textContent = "Committed " + completed + " file change(s) to GitHub.";
       approve.textContent = "Committed ✓";
-      showToast("CodeMind changes committed.");
+      showToast("GyattGPT changes committed.");
     } catch (error) {
       const permissionHint = /resource not accessible by integration|not permitted to .*contents|write access/i.test(error.message)
         ? "GitHub blocked the write. Open GitHub App settings → Permissions & events → Repository permissions → Contents, set Read and write, save, then accept the permission update on the repository installation."
@@ -201,7 +201,7 @@ async function sendMessage(text) {
     try {
       const repositories = await loadRepositories();
       const match = repositories.find(repo => repo.full_name.toLowerCase() === linkedRepo.toLowerCase());
-      if (!match) { showToast("That repository isn't installed for CodeMind. Install the GitHub App on it first."); return; }
+      if (!match) { showToast("That repository isn't installed for GyattGPT. Install the GitHub App on it first."); return; }
       activeGithubRepo = match.full_name;
       localStorage.setItem(REPO_STORAGE_KEY, activeGithubRepo);
       activeRepoSelect.value = activeGithubRepo;
@@ -219,7 +219,7 @@ async function sendMessage(text) {
   saveMessages(); render(); input.value = ""; resizeInput(); setBusy(true);
   const pending = document.createElement("article");
   pending.className = "message";
-  pending.innerHTML = '<div class="message-avatar">C</div><div class="message-content"><div class="message-role">CODEMIND</div><div class="message-text typing">Thinking···</div></div>';
+  pending.innerHTML = '<div class="message-avatar">G</div><div class="message-content"><div class="message-role">GYATTGPT</div><div class="message-text typing">Thinking···</div></div>';
   messagesEl.appendChild(pending);
   let chatEditResult = null;
   try {
@@ -240,11 +240,11 @@ async function sendMessage(text) {
       if (searchResponse.ok && Array.isArray(searchData.results)) {
         webResults = searchData.results;
       } else {
-        console.warn("CodeMind web search unavailable:", searchData.error || searchResponse.status);
+        console.warn("GyattGPT web search unavailable:", searchData.error || searchResponse.status);
       }
     } catch (searchError) {
       // Keep normal chat available if the search provider is temporarily down.
-      console.warn("CodeMind web search failed:", searchError.message);
+      console.warn("GyattGPT web search failed:", searchError.message);
     }
     pending.querySelector(".typing").textContent = "Thinking···";
     const endpoint = useEditWorkflow ? "/api/github/chat-edit" : "/api/chat";
@@ -272,7 +272,7 @@ async function sendMessage(text) {
     messages.push({ role: "assistant", content: data.reply.trim() }); saveMessages();
     chatEditResult = useEditWorkflow && data.edits?.length ? data.edits : null;
   } catch (error) {
-    messages.push({ role: "assistant", content: "I couldn't connect: " + error.message + "\n\nCheck that the CodeMind backend is deployed and GitHub is connected." }); saveMessages();
+    messages.push({ role: "assistant", content: "I couldn't connect: " + error.message + "\n\nCheck that the GyattGPT backend is deployed and GitHub is connected." }); saveMessages();
   } finally {
     setBusy(false); render();
     if (chatEditResult) renderChatEditProposals(chatEditResult, activeGithubRepo);
