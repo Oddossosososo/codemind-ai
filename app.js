@@ -1068,3 +1068,107 @@ function initCodeMindPreferences() {
 }
 initCodeMindPreferences();
 renderProjectMemory();
+
+
+/* CodeMind voice input */
+(() => {
+  const voiceButton = document.querySelector("#voiceButton");
+  const voiceLabel = document.querySelector("#voiceButtonLabel");
+  const voiceStatus = document.querySelector("#voiceStatus");
+  if (!voiceButton || !voiceLabel || !voiceStatus) return;
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    voiceButton.disabled = true;
+    voiceButton.title = "Voice typing is not supported by this browser.";
+    voiceLabel.textContent = "Unavailable";
+    voiceStatus.textContent = "BROWSER UNSUPPORTED";
+    voiceStatus.classList.add("is-error");
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.lang = "en-AU";
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  let listening = false;
+  let finalTranscript = "";
+  let baseText = "";
+
+  function setListening(active) {
+    listening = active;
+    voiceButton.classList.toggle("is-listening", active);
+    voiceButton.setAttribute("aria-pressed", String(active));
+    voiceLabel.textContent = active ? "Stop" : "Voice";
+    voiceButton.title = active ? "Stop voice typing" : "Start voice typing";
+    voiceStatus.classList.toggle("is-listening", active);
+    if (!active) voiceStatus.textContent = "VOICE READY";
+  }
+
+  voiceButton.addEventListener("click", () => {
+    if (listening) {
+      recognition.stop();
+      return;
+    }
+    if (!window.isSecureContext) {
+      voiceStatus.textContent = "HTTPS REQUIRED";
+      voiceStatus.classList.add("is-error");
+      showToast("Voice typing needs a secure HTTPS page.");
+      return;
+    }
+    finalTranscript = "";
+    baseText = input.value.trim();
+    voiceStatus.classList.remove("is-error");
+    voiceStatus.textContent = "REQUESTING MIC…";
+    try { recognition.start(); }
+    catch (error) {
+      voiceStatus.textContent = "TRY AGAIN";
+      voiceStatus.classList.add("is-error");
+      showToast("Microphone could not start. Try again.");
+    }
+  });
+
+  recognition.onstart = () => {
+    setListening(true);
+    voiceStatus.textContent = "LISTENING";
+  };
+
+  recognition.onresult = event => {
+    let interim = "";
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const phrase = event.results[i][0].transcript;
+      if (event.results[i].isFinal) finalTranscript += phrase;
+      else interim += phrase;
+    }
+    const spoken = finalTranscript.trim();
+    input.value = [baseText, spoken].filter(Boolean).join(baseText && spoken ? " " : "");
+    if (interim) voiceStatus.textContent = "HEARING: " + interim.trim().slice(0, 28);
+    else voiceStatus.textContent = "VOICE CAPTURED";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+
+  recognition.onerror = event => {
+    const messages = {
+      "not-allowed": "Microphone permission was blocked.",
+      "service-not-allowed": "Speech recognition is blocked by the browser.",
+      "no-speech": "No speech detected. Tap Voice to try again.",
+      "audio-capture": "No microphone was found."
+    };
+    voiceStatus.textContent = "VOICE ERROR";
+    voiceStatus.classList.add("is-error");
+    showToast(messages[event.error] || "Voice recognition stopped: " + event.error);
+  };
+
+  recognition.onend = () => {
+    setListening(false);
+    if (finalTranscript.trim()) voiceStatus.textContent = "VOICE CAPTURED";
+    else if (!voiceStatus.classList.contains("is-error")) voiceStatus.textContent = "VOICE READY";
+  };
+
+  form.addEventListener("submit", () => {
+    if (listening) recognition.stop();
+  });
+  window.addEventListener("pagehide", () => {
+    if (listening) recognition.abort();
+  });
+})();
