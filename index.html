@@ -73,41 +73,5 @@
   </div>
   <div class="toast" id="toast" role="status"></div>
   <script src="app.js" defer></script>
-  <script>
-    function hyperlinkText(text) {
-      const urlRegex = /(https?:\/\/[^\s<]+)/g;
-      return text.replace(urlRegex, function(url) {
-        const safeUrl = url.replace(/"/g, '&quot;');
-        return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${url}</a>`;
-      });
-    }
-    function enableMessageHyperlinks() {
-      const container = document.getElementById('messages');
-      if (!container) return;
-      const observer = new MutationObserver(mutations => {
-        for (const mutation of mutations) {
-          for (const node of mutation.addedNodes) {
-            if (node.nodeType !== Node.ELEMENT_NODE) continue;
-            // Process the node itself
-            if (node.childNodes.length === 1 && node.firstChild.nodeType === Node.TEXT_NODE) {
-              node.innerHTML = hyperlinkText(node.textContent);
-            }
-            // Process its descendants
-            node.querySelectorAll('*').forEach(el => {
-              if (el.childNodes.length === 1 && el.firstChild.nodeType === Node.TEXT_NODE) {
-                el.innerHTML = hyperlinkText(el.textContent);
-              }
-            });
-          }
-        }
-      });
-      observer.observe(container, { childList: true, subtree: true });
-    }
-    if (document.readyState !== 'loading') {
-      enableMessageHyperlinks();
-    } else {
-      document.addEventListener('DOMContentLoaded', enableMessageHyperlinks);
-    }
-  </script>
 </body>
 </html>
