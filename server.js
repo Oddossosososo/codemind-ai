@@ -751,34 +751,58 @@ function decodeSearchHtml(value) {
     .replace(/&gt;/g, ">").replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)));
 }
 
-async function fetchGDBrowserLevel(levelId) {
-  if (!/^\d{1,12}$/.test(String(levelId))) return null;
-  const response = await fetch("https://gdbrowser.com/api/level/" + encodeURIComponent(levelId), {
-    headers: { "User-Agent": "GyattGPT-AI/1.0 (Geometry Dash level lookup)" },
-    signal: AbortSignal.timeout(10000)
+async function fetchOfficialBoomlingsLevel(levelId) {
+  const cleanId = String(levelId);
+  if (!/^\d{1,12}$/.test(cleanId)) return null;
+  const body = new URLSearchParams({ str: cleanId, type: "10", secret: "Wmfd2893gb7", gameVersion: "22", binaryVersion: "51", page: "0" });
+  const response = await fetch("https://www.boomlings.com/database/getGJLevels21.php", {
+    method: "POST",
+    headers: { "User-Agent": "", "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+    signal: AbortSignal.timeout(12000)
   });
-  if (!response.ok) throw new Error("GDBrowser returned HTTP " + response.status);
-  const data = await response.json();
-  if (!data || data === -1 || String(data.id || "") !== String(levelId)) return null;
-  return {
-    name: String(data.name || "Unknown"),
-    id: String(data.id || levelId),
-    author: String(data.author || "Unknown"),
-    difficulty: String(data.difficulty || "Unknown"),
-    stars: data.stars ?? null,
-    downloads: data.downloads ?? null,
-    likes: data.likes ?? null,
-    length: String(data.length || "Unknown"),
-    songName: String(data.songName || "Unknown"),
-    songAuthor: String(data.songAuthor || "Unknown"),
-    featured: Boolean(data.featured),
-    epic: Boolean(data.epic),
-    legendary: Boolean(data.legendary),
-    mythic: Boolean(data.mythic),
-    url: "https://gdbrowser.com/" + encodeURIComponent(levelId)
-  };
+  if (!response.ok) throw new Error("Official Geometry Dash server returned HTTP " + response.status);
+  const raw = (await response.text()).trim();
+  if (!raw || raw === "-1") return null;
+  const sections = raw.split("#");
+  const creatorNames = new Map();
+  for (const entry of (sections[1] || "").split("|")) {
+    const parts = entry.split(":");
+    if (parts.length >= 2) creatorNames.set(String(parts[0]), parts[1]);
+  }
+  for (const levelRaw of (sections[0] || "").split("|").filter(Boolean)) {
+    const fields = levelRaw.split(":");
+    const data = {};
+    for (let i = 0; i + 1 < fields.length; i += 2) data[fields[i]] = fields[i + 1];
+    if (String(data["1"] || "") !== cleanId) continue;
+    const difficultyValue = Number(data["9"] || 0);
+    const isDemon = data["17"] === "1";
+    const demonDifficulty = Number(data["43"] || 0);
+    const demonNames = { 3: "Easy Demon", 4: "Medium Demon", 0: "Hard Demon", 5: "Insane Demon", 6: "Extreme Demon" };
+    const difficultyNames = { 0: "Unrated", 10: "Easy", 20: "Normal", 30: "Hard", 40: "Harder", 50: "Insane" };
+    const lengthNames = ["Tiny", "Short", "Medium", "Long", "XL"];
+    const epicValue = Number(data["42"] || 0);
+    return {
+      name: String(data["2"] || "Unknown"),
+      id: cleanId,
+      author: creatorNames.get(String(data["6"] || "")) || "Unknown",
+      difficulty: isDemon ? (demonNames[demonDifficulty] || "Demon") : (difficultyNames[difficultyValue] || "Unknown"),
+      stars: data["18"] === undefined ? null : Number(data["18"]),
+      downloads: data["10"] === undefined ? null : Number(data["10"]),
+      likes: data["14"] === undefined ? null : Number(data["14"]),
+      length: lengthNames[Number(data["15"])] || "Unknown",
+      songName: "Unknown",
+      songAuthor: "Unknown",
+      featured: Number(data["19"] || 0) > 0,
+      epic: epicValue > 0,
+      legendary: epicValue === 2,
+      mythic: epicValue === 3,
+      url: "https://gdbrowser.com/" + encodeURIComponent(cleanId),
+      dataSource: "Official Geometry Dash servers"
+    };
+  }
+  return null;
 }
-
 async function fetchGDBrowserLevelSearch(query) {
   const cleanQuery = String(query || "").trim().slice(0, 100);
   if (!cleanQuery) return [];
@@ -926,7 +950,7 @@ app.post("/api/chat", async (req, res) => {
   const gdLevelId = explicitLevelId?.[1] || gdIdFromContext?.[1];
   if (mentionsGeometryDash && gdLevelId) {
     try {
-      const level = await fetchGDBrowserLevel(gdLevelId);
+      const level = await fetchOfficialBoomlingsLevel(gdLevelId);
       systemContent += level
         ? "\n\nGD BROWSER LEVEL DATA (retrieved live for level ID " + gdLevelId + "; use as factual reference):\n" + JSON.stringify(level)
         : "\n\nGD BROWSER LEVEL LOOKUP: No level was returned for ID " + gdLevelId + ". Do not guess its details.";
@@ -955,19 +979,19 @@ app.post("/api/chat", async (req, res) => {
       try {
         const boomlingsMatches = await fetchGDBrowserLevelSearch(levelName);
 
-        // Never display a Boomlings candidate as confirmed until GDBrowser independently
+        // Never display a Boomlings candidate as confirmed until the official Geometry Dash servers independently
         // confirms that exact ID, level name, and creator.
         const verifiedMatches = [];
         for (const candidate of boomlingsMatches.slice(0, 20)) {
           try {
-            const verified = await fetchGDBrowserLevel(candidate.id);
-            if (!verified) continue;
+            const verified = await fetchOfficialBoomlingsLevel(candidate.id);
+            if (!verified || verified.author === "Unknown") continue;
             const sameName = verified.name.trim().toLowerCase() === candidate.name.trim().toLowerCase();
             const sameCreator = verified.author.trim().toLowerCase() === candidate.author.trim().toLowerCase();
             if (!sameName || !sameCreator) continue;
             verifiedMatches.push({ ...verified, searchSource: candidate.searchSource || "Boomlings" });
           } catch (verificationError) {
-            console.warn("GDBrowser verification failed for level", candidate.id, verificationError.message);
+            console.warn("Official Geometry Dash verification failed for level", candidate.id, verificationError.message);
           }
         }
 
@@ -994,7 +1018,7 @@ app.post("/api/chat", async (req, res) => {
         if (creatorMatches.length > 1) {
           return res.json({
             reply: "I verified multiple exact matches for **" + levelName + "** by **" + requestedCreator +
-              "** using both Boomlings and GDBrowser:\n" + creatorMatches.map(formatLevel).join("\n") +
+              "** using the official Geometry Dash servers:\n" + creatorMatches.map(formatLevel).join("\n") +
               "\n\nGDBrowser search: " + searchUrl
           });
         }
@@ -1033,7 +1057,7 @@ app.post("/api/chat", async (req, res) => {
         }
         return res.json({
           reply: "I couldn't verify **" + levelName +
-            "**. Boomlings candidates must also pass GDBrowser ID, name, and creator checks before I show them.\n\nGDBrowser search: " +
+            "**. Search candidates must pass an independent ID, name, and creator check against the official Geometry Dash servers before I show them.\n\nGDBrowser search: " +
             searchUrl + "\n\nNo level ID or stats will be guessed."
         });
       } catch (error) {
