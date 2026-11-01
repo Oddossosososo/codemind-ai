@@ -183,7 +183,7 @@ function renderAgentRunDetails(data) {
   messagesEl.appendChild(panel);
   panel.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
-\nfunction renderChatEditProposals(edits, repo) {
+function renderChatEditProposals(edits, repo) {
   if (!Array.isArray(edits) || !edits.length) return;
   const panel = document.createElement("section");
   panel.className = "chat-edit-proposals";
@@ -412,9 +412,28 @@ async function sendMessage(text) {
     }
     if (!response.ok) throw new Error(data.error || `Backend request failed (HTTP ${response.status}) at ${endpoint}. Check the Render service and its logs.`);
     if (editRouteFallback) data.reply = "The structured GitHub edit service is not deployed yet, so I used repository-aware chat as a fallback. I can still inspect the repository and draft the changes, but the approve-and-commit panel is unavailable until the backend is redeployed.\n\n" + data.reply;
+    if (useAgentMode && activeGithubRepo && asksForEdit) {
+      pending.querySelector(".typing").textContent = "Preparing reviewable GitHub changes···";
+      try {
+        const editResponse = await fetch(API_BASE_URL + "/api/github/chat-edit", {
+          method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+          body: JSON.stringify({ repo: activeGithubRepo, messages: preferenceMessages, editInstruction, preferences: preferenceContext, projectMemory: projectMemoryContext })
+        });
+        const editData = await editResponse.json().catch(() => ({}));
+        if (editResponse.ok && Array.isArray(editData.edits)) {
+          chatEditResult = editData.edits.length ? editData.edits : null;
+          if (!editData.edits.length) data.reply += "\n\nThe coding agent did not produce a reviewable file change for this request.";
+        } else {
+          data.reply += "\n\nI couldn't prepare the GitHub change proposal: " + (editData.error || "The edit service is unavailable.") + ". The analysis above is still available.";
+        }
+      } catch (editError) {
+        data.reply += "\n\nI couldn't prepare the GitHub change proposal: " + editError.message + ". The analysis above is still available.";
+      }
+    }
     if (typeof data.reply !== "string" || !data.reply.trim()) throw new Error("The model returned an empty response.");
     messages.push({ role: "assistant", content: data.reply.trim() }); saveMessages();
-    chatEditResult = useEditWorkflow && data.edits?.length ? data.edits : null;
+    if (useEditWorkflow && data.edits?.length) chatEditResult = data.edits;
+    if (useAgentMode) window.lastAgentRun = data;
   } catch (error) {
     messages.push({ role: "assistant", content: "I couldn't connect: " + error.message + "\n\nCheck that the CodeMind AI backend is deployed and GitHub is connected." }); saveMessages();
   } finally {
