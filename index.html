@@ -21,7 +21,6 @@
       <button class="new-chat" id="newChat"><span>＋</span> New chat <kbd>⌘ K</kbd></button>
       <div class="side-label">WORKSPACE</div>
       <button class="side-link active"><span class="side-icon">◈</span> Chat</button>
-      <button class="side-link" id="githubButton"><span class="side-icon">⌘</span> GitHub <span class="soon">NEW</span></button>
       <button class="side-link" id="projectsButton"><span class="side-icon">▦</span> Projects <span class="soon">SOON</span></button>
       <button class="side-link" id="memoryButton"><span class="side-icon">⌁</span> Memory <span class="soon">LOCAL</span></button>
       <div class="side-bottom">
@@ -42,26 +41,9 @@
       <header class="topbar">
         <button class="mobile-menu" id="mobileMenu" aria-label="Open menu">☰</button>
         <div class="breadcrumb">Workspace <span>/</span> <strong>New conversation</strong></div>
-        <div class="top-actions"><select id="activeRepoSelect" class="active-repo-select" aria-label="Repository for chat"><option value="">No repository selected</option></select><span class="private-pill"><i></i> LOCAL HISTORY</span><button class="icon-button" id="clearChat" title="Clear conversation">↺</button></div>
+        <div class="top-actions"><select id="activeRepoSelect" class="active-repo-select" aria-label="Connected GitHub repository" title="Paste a GitHub repository URL in chat to connect automatically"><option value="">No repository selected</option></select><span class="private-pill"><i></i> LOCAL HISTORY</span><button class="icon-button" id="clearChat" title="Clear conversation">↺</button></div>
       </header>
 
-      <section class="github-panel" id="githubPanel" hidden>
-        <div class="github-heading">
-          <div><div class="eyebrow"><span></span> REPOSITORY WORKSPACE</div><h2>GitHub <em>Explorer</em></h2><p>Connect your owner account, choose an installed repository, and open source files.</p></div>
-          <button class="connect-github" id="connectGithub">Connect GitHub ↗</button>
-        </div>
-        <div class="github-status" id="githubStatus" role="status">Not connected yet.</div>
-        <div class="github-controls">
-          <label>REPOSITORY<select id="repoSelect"><option value="">Connect GitHub to load repositories</option></select></label>
-          <button class="refresh-repos" id="refreshRepos">↻ Refresh</button>
-        </div>
-        <form class="file-form" id="fileForm">
-          <label for="filePath">FILE PATH</label>
-          <div class="file-input-row"><input id="filePath" placeholder="e.g. src/app.js" autocomplete="off"><button type="submit">Open file</button></div>
-        </form>
-        <div class="file-viewer" id="fileViewer"><div class="file-empty">Your selected file will appear here.</div></div>
-        <p class="github-note">CodeMind can propose file edits. Review every change and approve before it commits to GitHub.</p>
-      </section>
       <section class="chat-area" id="chatArea">
         <div class="welcome" id="welcome">
           <div class="eyebrow"><span></span> YOUR CODING PARTNER</div>
@@ -79,7 +61,7 @@
 
       <section class="composer-wrap">
         <form class="composer" id="chatForm">
-          <textarea id="messageInput" rows="1" placeholder="Ask CodeMind anything about code..." aria-label="Message CodeMind"></textarea>
+          <textarea id="messageInput" rows="1" placeholder="Ask CodeMind anything — or paste a GitHub repository link..." aria-label="Message CodeMind"></textarea>
           <div class="composer-footer">
             <div class="composer-hint"><span>↵</span> to send <span class="hint-divider">·</span> <kbd>Shift + ↵</kbd> for new line</div>
             <button class="send-button" id="sendButton" type="submit" aria-label="Send message"><span>↑</span></button>
