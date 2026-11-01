@@ -698,7 +698,7 @@ async function readGithubRepositoryContext(repo, requestText, options = {}) {
   return { repo, branch: selected.default_branch, files };
 }
 
-app.post("/api/github/chat-edit", requireOwner, async (req, res) => {
+app.post("/api/github/chat-edit", requireOwner, consumeChatQuota, async (req, res) => {
   if (!API_KEY) return res.status(503).json({ error: "The AI provider is not configured." });
   const repo = String(req.body?.repo || "");
   const incoming = Array.isArray(req.body?.messages) ? limitConversationMessages(req.body.messages.slice(-6), 2200, 900) : [];
@@ -762,7 +762,7 @@ app.post("/api/github/chat-edit", requireOwner, async (req, res) => {
 
 // Multi-agent task runner. Agents only analyse and propose; repository writes stay in the reviewed edit workflow.
 const AGENT_RUN_LIMITS = new Map();
-app.post("/api/agent/run", async (req, res) => {
+app.post("/api/agent/run", consumeChatQuota, async (req, res) => {
   const agentKey = imageUsageKey(req);
   const agentNow = Date.now();
   const recentAgentRuns = (AGENT_RUN_LIMITS.get(agentKey) || []).filter(time => agentNow - time < 60000);
@@ -1172,6 +1172,52 @@ app.post("/api/search", async (req, res) => {
   return res.json({ query, provider, results: payload });
 });
 
+
+const CHAT_HOURLY_LIMIT = 100;
+const CHAT_HOUR_MS = 60 * 60 * 1000;
+const CHAT_LIMIT_BYPASS_CODE = String(process.env.CHAT_LIMIT_BYPASS_CODE || "5925");
+const chatHourlyUsage = new Map();
+
+function hasChatLimitBypass(req) {
+  const bypass = readSignedToken(cookies(req).codemind_chat_bypass);
+  return Boolean(bypass && bypass.chatLimitBypass === true);
+}
+
+function consumeChatQuota(req, res, next) {
+  if (hasChatLimitBypass(req) || req.body?.agentFollowup === true) return next();
+  const key = imageUsageKey(req);
+  const now = Date.now();
+  const recent = (chatHourlyUsage.get(key) || []).filter(timestamp => now - timestamp < CHAT_HOUR_MS);
+  if (recent.length >= CHAT_HOURLY_LIMIT) {
+    const resetAt = recent[0] + CHAT_HOUR_MS;
+    chatHourlyUsage.set(key, recent);
+    return res.status(429).json({
+      code: "CHAT_HOURLY_LIMIT",
+      error: "You've reached the limit of 100 messages per hour.",
+      limit: CHAT_HOURLY_LIMIT,
+      resetAt
+    });
+  }
+  recent.push(now);
+  chatHourlyUsage.set(key, recent);
+  if (chatHourlyUsage.size > 10000) {
+    for (const [entryKey, timestamps] of chatHourlyUsage) {
+      if (!timestamps.some(timestamp => now - timestamp < CHAT_HOUR_MS)) chatHourlyUsage.delete(entryKey);
+    }
+  }
+  next();
+}
+
+app.post("/api/chat/unlock", (req, res) => {
+  const entered = String(req.body?.code || "").trim();
+  if (!safeEqual(entered, CHAT_LIMIT_BYPASS_CODE)) {
+    return res.status(401).json({ error: "That access code is incorrect." });
+  }
+  const token = makeSignedToken({ chatLimitBypass: true, exp: Date.now() + 24 * CHAT_HOUR_MS });
+  setCookie(res, "codemind_chat_bypass", token, 24 * 60 * 60);
+  res.json({ unlocked: true, expiresInHours: 24 });
+});
+
 const imageDailyUsage = new Map();
 const IMAGE_DAILY_LIMIT = 3;
 
@@ -1265,7 +1311,7 @@ app.post("/api/images/generate", async (req, res) => {
   }
 });
 
-app.post("/api/chat", async (req, res) => {
+app.post("/api/chat", consumeChatQuota, async (req, res) => {
   if (!API_KEY) {
     return res.status(503).json({ error: "The server owner needs to configure GROQ_API_KEY." });
   }
