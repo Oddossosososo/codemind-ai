@@ -980,13 +980,14 @@ app.post("/api/chat", async (req, res) => {
       return res.status(error.status || 502).json({ error: "Could not load the selected GitHub repository: " + error.message });
     }
   }
-  const conversationText = allowed.map(item => item.content).join("\n");
   const userMessages = allowed.filter(item => item.role === "user").map(item => item.content);
   const latestUserMessage = userMessages.slice(-1)[0] || "";
-  const mentionsGeometryDash = /geometry\s*dash|\bGD\b|gdbrowser/i.test(conversationText);
-  const explicitLevelId = conversationText.match(/(?:level\s*(?:id)?\s*[:#]?\s*|\bid\s*[:#]\s*)(\d{1,12})/i);
+  // Route Geometry Dash lookups from the current request, not old messages in chat history.
+  // Otherwise one earlier GD question hijacks every unrelated question afterwards.
+  const mentionsGeometryDash = /geometry\s*dash|\bGD\b|gdbrowser/i.test(latestUserMessage);
+  const explicitLevelId = latestUserMessage.match(/(?:level\s*(?:id)?\s*[:#]?\s*|\bid\s*[:#]\s*)(\d{1,12})/i);
   const gdIdFromContext = mentionsGeometryDash
-    ? conversationText.match(/\b(?:level|id)\s+(\d{1,12})\b/i)
+    ? latestUserMessage.match(/\b(?:level|id)\s+(\d{1,12})\b/i)
     : null;
   const gdLevelId = explicitLevelId?.[1] || gdIdFromContext?.[1];
   if (mentionsGeometryDash && gdLevelId) {
@@ -1005,15 +1006,15 @@ app.post("/api/chat", async (req, res) => {
   } else {
     // Detect level + creator anywhere in the user's message, including pasted instructions/transcripts.
     // This makes requests like '"tidal wave" by creator "onilink"' work even when followed by extra text.
-    const userText = userMessages.join("\n");
-    const quotedLevelCreator = [...userMessages].reverse().map(message =>
+    const gdRequestMessages = [latestUserMessage];
+    const quotedLevelCreator = gdRequestMessages.map(message =>
       message.match(/["“']([^"”']{2,80})["”']\s+by\s+(?:the\s+creator\s+)?["“']?([A-Za-z0-9_-]{2,32})/i)
     ).find(Boolean);
-    const plainLevelCreator = [...userMessages].reverse().map(message =>
+    const plainLevelCreator = gdRequestMessages.map(message =>
       message.match(/\b(?:find|search(?:\s+for)?|look\s+up)?\s*(?:the\s+)?(?:GD\s+)?level\s+(.{2,80}?)\s+by\s+([A-Za-z0-9_-]{2,32})(?=$|[\s.,!?])/i)
     ).find(Boolean);
     const pairMatch = quotedLevelCreator || plainLevelCreator;
-    const levelRequestText = pairMatch ? "" : ([...userMessages].reverse().find(message =>
+    const levelRequestText = pairMatch ? "" : (gdRequestMessages.find(message =>
       /\bby\s+[A-Za-z0-9_-]{2,32}\b/i.test(message) ||
       /\b(?:find|look\s+for|look\s+up|search|what\s+id|level\s+id)\b/i.test(message)
     ) || latestUserMessage);
