@@ -13,6 +13,7 @@ const STORAGE_KEY = "codemind-chat-v1";
 const API_BASE_URL = "https://codemind-ai-l8ix.onrender.com";
 let messages = loadMessages();
 let busy = false;
+let activeGithubFile = null;
 
 function loadMessages() {
   try {
@@ -75,7 +76,11 @@ async function sendMessage(text) {
     const response = await fetch(`${API_BASE_URL}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: messages.slice(-20) })
+      credentials: "include",
+      body: JSON.stringify({
+        messages: messages.slice(-20),
+        githubFile: activeGithubFile
+      })
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || "The server couldn't answer. Check your setup.");
@@ -111,6 +116,7 @@ document.querySelectorAll(".suggestion").forEach(button => {
 });
 document.querySelector("#newChat").addEventListener("click", () => {
   messages = [];
+  activeGithubFile = null;
   saveMessages();
   render();
   input.focus();
@@ -185,7 +191,17 @@ document.querySelector("#fileForm").addEventListener("submit", async event => {
     const code = document.createElement("code");
     code.textContent = data.content;
     pre.appendChild(code);
-    fileViewer.replaceChildren(title, pre);
+    const attachButton = document.createElement("button");
+    attachButton.type = "button";
+    attachButton.className = "attach-file-button";
+    attachButton.textContent = "＋ Use this file in chat";
+    attachButton.addEventListener("click", () => {
+      activeGithubFile = { repo, path: data.path };
+      showChatPanel();
+      showToast("Attached " + data.path + " to your next messages.");
+      input.focus();
+    });
+    fileViewer.replaceChildren(title, pre, attachButton);
   } catch (error) {
     fileViewer.textContent = error.message;
   }
