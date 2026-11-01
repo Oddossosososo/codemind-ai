@@ -1352,6 +1352,75 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
+
+/* Guest-to-owner inbox. Messages are visible to the authenticated site owner. */
+const GUEST_INBOX_MESSAGES = [];
+const GUEST_INBOX_RATE = new Map();
+let guestInboxSequence = 1;
+
+app.post("/api/guest-inbox/messages", (req, res) => {
+  const guestId = String(req.body?.guestId || "");
+  const username = String(req.body?.username || "Guest").trim().slice(0, 24) || "Guest";
+  const message = String(req.body?.message || "").trim();
+  if (!/^[a-zA-Z0-9_-]{12,80}$/.test(guestId)) {
+    return res.status(400).json({ error: "Invalid guest session. Refresh and try again." });
+  }
+  if (!message || message.length > 1000) {
+    return res.status(400).json({ error: "Messages must be between 1 and 1000 characters." });
+  }
+  const now = Date.now();
+  const recent = (GUEST_INBOX_RATE.get(guestId) || []).filter(time => now - time < 60000);
+  if (recent.length >= 5) {
+    return res.status(429).json({ error: "Please wait a minute before sending more messages." });
+  }
+  recent.push(now);
+  GUEST_INBOX_RATE.set(guestId, recent);
+  const item = {
+    id: guestInboxSequence++,
+    guestId,
+    username: username.replace(/[<>]/g, ""),
+    message,
+    createdAt: new Date(now).toISOString(),
+    reply: "",
+    repliedAt: null
+  };
+  GUEST_INBOX_MESSAGES.push(item);
+  if (GUEST_INBOX_MESSAGES.length > 400) GUEST_INBOX_MESSAGES.splice(0, GUEST_INBOX_MESSAGES.length - 400);
+  res.status(201).json({ message: { id: item.id, message: item.message, createdAt: item.createdAt, reply: item.reply, repliedAt: item.repliedAt } });
+});
+
+app.get("/api/guest-inbox/replies", (req, res) => {
+  const guestId = String(req.query.guestId || "");
+  if (!/^[a-zA-Z0-9_-]{12,80}$/.test(guestId)) {
+    return res.status(400).json({ error: "Invalid guest session." });
+  }
+  res.json({
+    messages: GUEST_INBOX_MESSAGES
+      .filter(item => item.guestId === guestId)
+      .map(({ id, message, createdAt, reply, repliedAt }) => ({ id, message, createdAt, reply, repliedAt }))
+  });
+});
+
+app.get("/api/guest-inbox/messages", requireOwner, (_req, res) => {
+  res.json({
+    messages: GUEST_INBOX_MESSAGES.map(({ id, guestId, username, message, createdAt, reply, repliedAt }) =>
+      ({ id, guestId, username, message, createdAt, reply, repliedAt }))
+  });
+});
+
+app.post("/api/guest-inbox/reply", requireOwner, (req, res) => {
+  const id = Number(req.body?.id);
+  const reply = String(req.body?.reply || "").trim();
+  if (!Number.isInteger(id) || !reply || reply.length > 1000) {
+    return res.status(400).json({ error: "A message ID and reply of up to 1000 characters are required." });
+  }
+  const item = GUEST_INBOX_MESSAGES.find(entry => entry.id === id);
+  if (!item) return res.status(404).json({ error: "That guest message is no longer available." });
+  item.reply = reply;
+  item.repliedAt = new Date().toISOString();
+  res.json({ ok: true });
+});
+
 app.listen(PORT, () => {
   console.log(`GyattGPT is running at http://localhost:${PORT}`);
 });
