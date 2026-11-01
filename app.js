@@ -228,23 +228,26 @@ async function sendMessage(text) {
     const useEditWorkflow = Boolean(activeGithubRepo && asksForEdit);
     const useRepositoryContext = Boolean(activeGithubRepo && projectRelated);
     let webResults = [];
-    // Search every user message, not only prompts containing "search" or "latest".
-    try {
-      pending.querySelector(".typing").textContent = "Searching the web···";
-      const searchResponse = await fetch(API_BASE_URL + "/api/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: content })
-      });
-      const searchData = await searchResponse.json().catch(() => ({}));
-      if (searchResponse.ok && Array.isArray(searchData.results)) {
-        webResults = searchData.results;
-      } else {
-        console.warn("GyattGPT web search unavailable:", searchData.error || searchResponse.status);
+    // Only run web search for requests that actually ask for current or online information.
+    // Ordinary chat should go straight to the AI instead of waiting on Google.
+    if (isWebSearchRequest(content)) {
+      try {
+        pending.querySelector(".typing").textContent = "Searching the web···";
+        const searchResponse = await fetch(API_BASE_URL + "/api/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: content })
+        });
+        const searchData = await searchResponse.json().catch(() => ({}));
+        if (searchResponse.ok && Array.isArray(searchData.results)) {
+          webResults = searchData.results;
+        } else {
+          console.warn("GyattGPT web search unavailable:", searchData.error || searchResponse.status);
+        }
+      } catch (searchError) {
+        // Keep normal chat available if the search provider is temporarily down.
+        console.warn("GyattGPT web search failed:", searchError.message);
       }
-    } catch (searchError) {
-      // Keep normal chat available if the search provider is temporarily down.
-      console.warn("GyattGPT web search failed:", searchError.message);
     }
     pending.querySelector(".typing").textContent = "Thinking···";
     const endpoint = useEditWorkflow ? "/api/github/chat-edit" : "/api/chat";
