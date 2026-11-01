@@ -20,7 +20,8 @@
       </a>
       <button class="new-chat" id="newChat"><span>＋</span> New chat <kbd>⌘ K</kbd></button>
       <div class="side-label">WORKSPACE</div>
-      <button class="side-link active"><span class="side-icon">◈</span> Chat</button>
+      <button class="side-link active" id="chatButton"><span class="side-icon">◈</span> Chat</button>
+      <button class="side-link" id="newsButton"><span class="side-icon">▤</span> News <span class="news-new">NEW</span></button>
       <button class="side-link" id="projectsButton"><span class="side-icon">▦</span> Projects <span class="soon">SOON</span></button>
       <button class="side-link" id="memoryButton"><span class="side-icon">⌁</span> Memory <span class="soon">LOCAL</span></button>
       <div class="side-bottom">
@@ -44,6 +45,19 @@
         <div class="top-actions"><select id="activeRepoSelect" class="active-repo-select" aria-label="Connected GitHub repository" title="Paste a GitHub repository URL in chat to connect automatically"><option value="">No repository selected</option></select><span class="private-pill"><i></i> LOCAL HISTORY</span><button class="icon-button" id="clearChat" title="Clear conversation">↺</button></div>
       </header>
 
+      <section class="news-view" id="newsView" hidden>
+        <div class="news-heading">
+          <div class="eyebrow"><span></span> CODEMIND UPDATES</div>
+          <h1>Latest <em>news.</em></h1>
+          <p>Announcements and updates from the CodeMind workspace.</p>
+        </div>
+        <article class="news-feature">
+          <div class="news-meta"><span class="news-tag">BETA TEAM</span><time datetime="2026-11-01">NOVEMBER 1, 2026</time></div>
+          <h2>Meet our beta tester: RashWasTaken</h2>
+          <p>We're welcoming <strong>RashWasTaken</strong> as a CodeMind AI beta tester. They'll help explore the workspace, try new features, and share feedback as CodeMind develops.</p>
+          <div class="news-byline">CODEMIND TEAM <span>·</span> BETA ANNOUNCEMENT</div>
+        </article>
+      </section>
       <section class="chat-area" id="chatArea">
         <div class="welcome" id="welcome">
           <div class="eyebrow"><span></span> YOUR CODING PARTNER</div>
