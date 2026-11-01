@@ -965,8 +965,9 @@ app.post("/api/chat", async (req, res) => {
   if (mentionsGeometryDash && !gdLevelId) {
     const text = latestUserMessage;
     const dailyWeekly = text.match(/\b(daily|weekly)\b/i);
-    const mostLikedMatch = text.match(/\bmost[- ]liked\s+(?:level\s+)?(?:by|from|of)\s+([A-Za-z0-9_-]{2,32})\b/i)
-      || text.match(/\b(?:most[- ]liked|highest[- ]liked)\s+(?:level\s+)?(?:by\s+)?([A-Za-z0-9_-]{2,32})\b/i);
+    const mostLikedMatch = text.match(/\b(?:most[- ]liked|highest[- ]liked)\s+(?:level\s+)?(?:by|from|of|for)\s+([A-Za-z0-9_-]{2,32})\b/i)
+      || text.match(/\b(?:most[- ]liked|highest[- ]liked)\s+(?:level\s+)?(?:by\s+)?([A-Za-z0-9_-]{2,32})\b/i)
+      || text.match(/\b([A-Za-z0-9_-]{2,32})['’]s\s+(?:most[- ]liked|highest[- ]liked)\s+level\b/i);
     const profileMatch = text.match(/\b(?:profile|stats|statistics|player)\s+(?:(?:of|for)\s+)?([A-Za-z0-9_-]{2,32})\b/i)
       || text.match(/\b(?:user|player)\s+([A-Za-z0-9_-]{2,32})\s+(?:profile|stats)\b/i);
     const asksLeaderboard = /\b(leaderboard|top players|top creators|global rankings)\b/i.test(text);
