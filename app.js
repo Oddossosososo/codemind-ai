@@ -285,11 +285,10 @@ async function sendMessage(text) {
     pending.querySelector(".typing").textContent = "Thinking···";
     const endpoint = useEditWorkflow ? "/api/github/chat-edit" : "/api/chat";
     const preferenceMessages = messages.slice(useEditWorkflow ? -12 : -20).map(item => ({ ...item }));
-    const latestUser = [...preferenceMessages].reverse().find(item => item.role === "user");
-    if (latestUser) latestUser.content += "\n\n" + getPreferenceInstruction();
+    const preferenceContext = getPreferenceInstruction();
     const payload = useEditWorkflow
-      ? { repo: activeGithubRepo, messages: preferenceMessages }
-      : { messages: preferenceMessages, ...(useRepositoryContext ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) };
+      ? { repo: activeGithubRepo, messages: preferenceMessages, preferences: preferenceContext }
+      : { messages: preferenceMessages, preferences: preferenceContext, ...(useRepositoryContext ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) };
     let response = await fetch(API_BASE_URL + endpoint, {
       method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(payload)
     });
@@ -300,7 +299,7 @@ async function sendMessage(text) {
     if (useEditWorkflow && response.status === 404) {
       response = await fetch(API_BASE_URL + "/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ messages: messages.slice(-20), ...(useRepositoryContext ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) })
+        body: JSON.stringify({ messages: messages.slice(-20), preferences: preferenceContext, ...(useRepositoryContext ? { githubRepo: activeGithubRepo } : {}), ...(webResults.length ? { webResults } : {}) })
       });
       data = await response.json().catch(() => ({}));
       editRouteFallback = response.ok;
@@ -703,8 +702,8 @@ function getPreferenceInstruction() {
   const length = { concise: "Keep answers concise.", balanced: "Use a balanced amount of detail.", detailed: "Give thorough explanations and examples." }[p.length] || "";
   const style = { explain: "Explain code step by step.", "code-first": "Put the working code first, followed by a short explanation.", debug: "Identify the likely cause first, then show the fix." }[p.style] || "";
   const modding = p.hacks ? "Do not refuse merely because a coding request mentions game mods, cheats, browser-console experiments, reverse engineering, CTFs, or security testing. Help with legitimate single-player modding and systems the user owns or is authorised to test. Do not assist credential theft, malware, or unauthorised access." : "For game modding and security topics, provide ordinary safe, authorised guidance.";
-  const custom = p.custom.filter(item => item.enabled !== false).map(item => item.text.trim()).filter(Boolean);
-  return "[User response preferences: " + [skill, length, style, modding, custom.length ? "Additional user preferences: " + custom.join(" | ") : ""].filter(Boolean).join(" ") + "]";
+  const custom = p.custom.filter(item => item.enabled !== false).map(item => item.text.trim().slice(0, 2000)).filter(Boolean);
+  return [skill, length, style, modding, custom.length ? "Custom preferences (apply when relevant):\n" + custom.map((item, index) => (index + 1) + ". " + item).join("\n") : ""].filter(Boolean).join("\n");
 }
 function initCodeMindPreferences() {
   const p = readCodeMindPreferences();
