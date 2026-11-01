@@ -98,7 +98,7 @@
       </section>
       <section class="tool-view testlab-view" id="testLabView" hidden>
         <div class="tool-heading"><div class="eyebrow"><span></span> ISOLATED JAVASCRIPT RUNNER</div><h1>Test <em>lab.</em></h1><p>Run small JavaScript experiments in a disposable worker, separate from the CodeMind page.</p></div>
-        <div class="tool-card testlab-card"><div class="testlab-toolbar"><span class="tool-kicker">JAVASCRIPT SANDBOX</span><span class="sandbox-pill">NO DOM · NETWORK BLOCKED · 3.5S LIMIT</span></div><textarea id="testLabCode" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Test lab JavaScript code">const numbers = [4, 8, 15, 16, 23, 42];
+        <div class="tool-card testlab-card"><div class="testlab-toolbar"><span class="tool-kicker">JAVASCRIPT SANDBOX</span><span class="sandbox-pill">NO DOM · COMMON NETWORK APIS BLOCKED · 3.5S LIMIT</span></div><textarea id="testLabCode" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Test lab JavaScript code">const numbers = [4, 8, 15, 16, 23, 42];
 console.log("Numbers:", numbers);
 console.log("Total:", numbers.reduce((sum, number) => sum + number, 0));</textarea><div class="tool-actions"><button id="runTestLab" class="primary-tool-button" type="button">▶ Run code</button><button id="clearTestLab" type="button">Clear output</button></div><div class="testlab-output-head"><strong>Console output</strong><span id="testLabStatus">Ready</span></div><pre class="testlab-output" id="testLabOutput" aria-live="polite">Your output will appear here.</pre></div>
       </section>
