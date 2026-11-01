@@ -405,7 +405,7 @@ document.querySelector("#clearChat").addEventListener("click", () => {
   render();
   showToast("Conversation cleared from this browser.");
 });
-document.querySelector("#memoryButton").addEventListener("click", () => showToast("Chat history is saved locally in this browser for now."));
+
 async function githubFetch(path) {
   const response = await fetch(API_BASE_URL + path, { credentials: "include" });
   const data = await response.json().catch(() => ({}));
@@ -432,21 +432,29 @@ activeRepoSelect.addEventListener("change", () => {
   showToast(activeGithubRepo ? "Chat connected to " + activeGithubRepo : "Repository context turned off.");
 });
 function showWorkspaceTab(tab) {
-  const showNews = tab === "news";
-  const showPreferences = tab === "preferences";
-  newsView.hidden = !showNews;
-  document.querySelector("#preferencesView").hidden = !showPreferences;
-  chatArea.hidden = showNews || showPreferences;
-  composerWrap.hidden = showNews || showPreferences;
-  chatButton.classList.toggle("active", tab === "chat");
-  newsButton.classList.toggle("active", showNews);
-  document.querySelector("#preferencesButton").classList.toggle("active", showPreferences);
-  document.querySelector(".breadcrumb strong").textContent = showNews ? "News" : showPreferences ? "Preferences" : "New conversation";
+  const views = { editor: "#editorView", github: "#githubView", search: "#searchView", memory: "#memoryView", testlab: "#testLabView", news: "#newsView", preferences: "#preferencesView" };
+  Object.entries(views).forEach(([key, selector]) => {
+    const view = document.querySelector(selector);
+    if (view) view.hidden = key !== tab;
+  });
+  const isChat = tab === "chat";
+  chatArea.hidden = !isChat;
+  composerWrap.hidden = !isChat;
+  document.querySelectorAll("[data-workspace-tab]").forEach(button => button.classList.toggle("active", button.dataset.workspaceTab === tab));
+  const labels = { chat: "New conversation", editor: "Code editor", github: "GitHub", search: "Smart search", memory: "Project memory", testlab: "Test lab", news: "News", preferences: "Preferences" };
+  document.querySelector(".breadcrumb strong").textContent = labels[tab] || "Workspace";
+  document.querySelector("#sidebar").classList.remove("open");
+  if (tab === "memory") renderProjectMemory();
+  if (tab === "github") refreshGithubWorkspace();
 }
 chatButton.addEventListener("click", () => showWorkspaceTab("chat"));
 newsButton.addEventListener("click", () => showWorkspaceTab("news"));
 document.querySelector("#preferencesButton").addEventListener("click", () => showWorkspaceTab("preferences"));
-document.querySelector("#projectsButton").addEventListener("click", () => showToast("Project workspace is coming in a later version."));
+document.querySelector("#editorButton").addEventListener("click", () => showWorkspaceTab("editor"));
+document.querySelector("#githubButton").addEventListener("click", () => showWorkspaceTab("github"));
+document.querySelector("#searchButton").addEventListener("click", () => showWorkspaceTab("search"));
+document.querySelector("#memoryButton").addEventListener("click", () => showWorkspaceTab("memory"));
+document.querySelector("#testLabButton").addEventListener("click", () => showWorkspaceTab("testlab"));
 document.querySelector("#mobileMenu").addEventListener("click", () => document.querySelector("#sidebar").classList.toggle("open"));
 document.addEventListener("keydown", event => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
