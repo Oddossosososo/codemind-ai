@@ -62,6 +62,68 @@ function setBusy(value) {
   sendButton.disabled = value;
   sendButton.innerHTML = value ? '<span class="typing">···</span>' : '<span>↑</span>';
 }
+function renderChatEditProposals(edits, repo) {
+  if (!Array.isArray(edits) || !edits.length) return;
+  const panel = document.createElement("section");
+  panel.className = "chat-edit-proposals";
+  const heading = document.createElement("strong");
+  heading.textContent = "CodeMind prepared " + edits.length + " file change(s)";
+  const note = document.createElement("p");
+  note.textContent = "Review the code below. GitHub is unchanged until you approve.";
+  panel.append(heading, note);
+  const entries = [];
+  edits.forEach(edit => {
+    const item = document.createElement("div");
+    item.className = "chat-edit-item";
+    const path = document.createElement("div");
+    path.className = "chat-edit-path";
+    path.textContent = edit.path;
+    const summary = document.createElement("p");
+    summary.textContent = edit.summary;
+    const editor = document.createElement("textarea");
+    editor.className = "chat-edit-code";
+    editor.spellcheck = false;
+    editor.value = edit.content;
+    item.append(path, summary, editor);
+    panel.appendChild(item);
+    entries.push({ edit, editor });
+  });
+  const approve = document.createElement("button");
+  approve.type = "button";
+  approve.className = "chat-edit-approve";
+  approve.textContent = "Review & approve commits";
+  const status = document.createElement("div");
+  status.className = "chat-edit-status";
+  approve.addEventListener("click", async () => {
+    if (!window.confirm("Commit these reviewed changes to " + repo + "?")) return;
+    approve.disabled = true;
+    approve.textContent = "Committing…";
+    let completed = 0;
+    try {
+      for (const entry of entries) {
+        await githubPost("/api/github/commit-file", {
+          repo, path: entry.edit.path, sha: entry.edit.sha,
+          content: entry.editor.value,
+          message: "Update " + entry.edit.path + " via CodeMind"
+        });
+        completed++;
+      }
+      status.textContent = "Committed " + completed + " file change(s) to GitHub.";
+      approve.textContent = "Committed ✓";
+      showToast("CodeMind changes committed.");
+    } catch (error) {
+      status.textContent = completed
+        ? completed + " file(s) committed before an error: " + error.message
+        : error.message;
+      approve.disabled = false;
+      approve.textContent = "Retry remaining changes";
+      entries.splice(0, completed);
+    }
+  });
+  panel.append(approve, status);
+  messagesEl.appendChild(panel);
+  panel.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
 async function sendMessage(text) {
   const content = text.trim();
   if (!content || busy) return;
