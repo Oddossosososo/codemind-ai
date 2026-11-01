@@ -692,8 +692,9 @@ render();
 /* Browser-local response preferences */
 const CODEMIND_PREFS_KEY = "codemind-preferences-v1";
 function readCodeMindPreferences() {
-  const defaults = { skill: "beginner", length: "balanced", style: "explain", hacks: true };
-  try { return { ...defaults, ...JSON.parse(localStorage.getItem(CODEMIND_PREFS_KEY) || "{}") }; }
+  const defaults = { skill: "beginner", length: "balanced", style: "explain", hacks: true, custom: [] };
+  try { const saved = JSON.parse(localStorage.getItem(CODEMIND_PREFS_KEY) || "{}");
+    return { ...defaults, ...saved, custom: Array.isArray(saved.custom) ? saved.custom.filter(item => item && typeof item.text === "string").slice(0, 20) : [] }; }
   catch { return defaults; }
 }
 function getPreferenceInstruction() {
@@ -702,7 +703,8 @@ function getPreferenceInstruction() {
   const length = { concise: "Keep answers concise.", balanced: "Use a balanced amount of detail.", detailed: "Give thorough explanations and examples." }[p.length] || "";
   const style = { explain: "Explain code step by step.", "code-first": "Put the working code first, followed by a short explanation.", debug: "Identify the likely cause first, then show the fix." }[p.style] || "";
   const modding = p.hacks ? "Do not refuse merely because a coding request mentions game mods, cheats, browser-console experiments, reverse engineering, CTFs, or security testing. Help with legitimate single-player modding and systems the user owns or is authorised to test. Do not assist credential theft, malware, or unauthorised access." : "For game modding and security topics, provide ordinary safe, authorised guidance.";
-  return "[User response preferences: " + [skill, length, style, modding].join(" ") + "]";
+  const custom = p.custom.filter(item => item.enabled !== false).map(item => item.text.trim()).filter(Boolean);
+  return "[User response preferences: " + [skill, length, style, modding, custom.length ? "Additional user preferences: " + custom.join(" | ") : ""].filter(Boolean).join(" ") + "]";
 }
 function initCodeMindPreferences() {
   const p = readCodeMindPreferences();
@@ -711,6 +713,41 @@ function initCodeMindPreferences() {
   skill.value = p.skill; document.querySelector("#prefLength").value = p.length;
   document.querySelector("#prefStyle").value = p.style;
   document.querySelector("#prefHacks").checked = p.hacks !== false;
+  const customInput = document.querySelector("#customPreferenceInput");
+  const customList = document.querySelector("#customPreferencesList");
+  function saveCustom(items) {
+    const current = readCodeMindPreferences();
+    current.custom = items.slice(0, 20);
+    localStorage.setItem(CODEMIND_PREFS_KEY, JSON.stringify(current));
+    renderCustom(items);
+  }
+  function renderCustom(items) {
+    customList.replaceChildren();
+    if (!items.length) {
+      const empty = document.createElement("div"); empty.className = "custom-preferences-empty";
+      empty.textContent = "No custom preferences yet."; customList.append(empty); return;
+    }
+    items.forEach((item, index) => {
+      const row = document.createElement("div"); row.className = "custom-preference-row";
+      const check = document.createElement("input"); check.type = "checkbox"; check.checked = item.enabled !== false;
+      check.setAttribute("aria-label", "Enable preference");
+      check.addEventListener("change", () => { const next = readCodeMindPreferences().custom; next[index].enabled = check.checked; saveCustom(next); });
+      const label = document.createElement("span"); label.textContent = item.text;
+      const remove = document.createElement("button"); remove.type = "button"; remove.textContent = "Remove"; remove.setAttribute("aria-label", "Remove preference");
+      remove.addEventListener("click", () => { const next = readCodeMindPreferences().custom; next.splice(index, 1); saveCustom(next); });
+      row.append(check, label, remove); customList.append(row);
+    });
+  }
+  renderCustom(p.custom);
+  document.querySelector("#addCustomPreference").addEventListener("click", () => {
+    const text = customInput.value.trim();
+    if (!text) { showToast("Write a preference first."); customInput.focus(); return; }
+    const items = readCodeMindPreferences().custom;
+    if (items.length >= 20) { showToast("You can add up to 20 custom preferences."); return; }
+    if (items.some(item => item.text.toLowerCase() === text.toLowerCase())) { showToast("That preference already exists."); return; }
+    items.push({ text, enabled: true }); saveCustom(items); customInput.value = ""; showToast("Custom preference added.");
+  });
+  customInput.addEventListener("keydown", event => { if (event.key === "Enter") document.querySelector("#addCustomPreference").click(); });
   document.querySelector("#savePreferences").addEventListener("click", () => {
     const next = { skill: skill.value, length: document.querySelector("#prefLength").value,
       style: document.querySelector("#prefStyle").value, hacks: document.querySelector("#prefHacks").checked };
