@@ -845,78 +845,80 @@ async function fetchGDBrowserLevelSearch(query) {
   }
   return [];
 }
+const webSearchCache = new Map();
+
 app.post("/api/search", async (req, res) => {
   const query = String(req.body?.query || "").trim().slice(0, 240);
   if (!query) return res.status(400).json({ error: "Enter something to search for." });
 
-  const results = [];
-  const addResult = (title, rawUrl, snippet) => {
-    let url = String(rawUrl || "").replace(/&amp;/g, "&");
-    if (url.startsWith("//")) url = "https:" + url;
-    if (/duckduckgo\.com\/l\/\?/.test(url)) {
-      try { url = new URL(url).searchParams.get("uddg") || url; } catch {}
-    }
-    if (!/^https?:\/\//i.test(url) || /(?:google|duckduckgo)\.com\/(?:search|preferences|policies|l\/)/i.test(url)) return;
-    const cleanTitle = decodeSearchHtml(String(title || "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ")).trim();
-    if (!cleanTitle || results.some(item => item.url === url)) return;
-    results.push({
-      title: cleanTitle.slice(0, 180),
-      url: url.slice(0, 500),
-      snippet: decodeSearchHtml(String(snippet || "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ")).trim().slice(0, 400)
+  const apiKey = process.env.TAVILY_API_KEY;
+  if (!apiKey) {
+    return res.status(503).json({
+      error: "AI web search is not configured yet. Add TAVILY_API_KEY to the Render environment."
     });
-  };
+  }
 
-  // Try Google first, then DuckDuckGo if Google blocks or returns no usable results.
+  const cacheKey = query.toLowerCase();
+  const cached = webSearchCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return res.json({ query, provider: "Tavily", results: cached.results, cached: true });
+  }
+
   try {
-    const response = await fetch("https://www.google.com/search?udm=14&q=" + encodeURIComponent(query), {
+    const upstream = await fetch("https://api.tavily.com/search", {
+      method: "POST",
       headers: {
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept-Language": "en-AU,en;q=0.9"
+        "Authorization": "Bearer " + apiKey,
+        "Content-Type": "application/json",
+        "Accept": "application/json"
       },
-      signal: AbortSignal.timeout(10000)
+      body: JSON.stringify({
+        query,
+        search_depth: "basic",
+        topic: "general",
+        max_results: 5,
+        include_answer: false,
+        include_raw_content: false
+      }),
+      signal: AbortSignal.timeout(18000)
     });
-    if (response.ok) {
-      const html = await response.text();
-      const anchors = html.matchAll(/<a\s+[^>]*href="(https?:\/\/[^"]+)"[^>]*>([\s\S]*?<h3[\s\S]*?<\/h3>[\s\S]*?)<\/a>/gi);
-      for (const match of anchors) {
-        const titleMatch = match[2].match(/<h3[^>]*>([\s\S]*?)<\/h3>/i);
-        const after = html.slice(match.index + match[0].length, match.index + match[0].length + 1400);
-        const snippetMatch = after.match(/<(?:div|span)[^>]*>([^<>]{35,500})<\/(?:div|span)>/i);
-        addResult(titleMatch?.[1], match[1], snippetMatch?.[1]);
-        if (results.length >= 5) break;
-      }
-    }
-  } catch (error) {
-    console.warn("Google Search unavailable:", error.message);
-  }
 
-  if (!results.length) {
-    try {
-      const response = await fetch("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query), {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-          "Accept-Language": "en-AU,en;q=0.9"
-        },
-        signal: AbortSignal.timeout(10000)
+    const payload = await upstream.json().catch(() => ({}));
+    if (!upstream.ok) {
+      const detail = String(payload?.detail || payload?.error || "Unknown Tavily error").slice(0, 240);
+      console.error("Tavily Search error:", upstream.status, detail);
+      return res.status(upstream.status === 429 ? 429 : 502).json({
+        error: upstream.status === 429
+          ? "Tavily search is rate-limited. Try again shortly."
+          : "Tavily search failed. Check the TAVILY_API_KEY and Tavily account access."
       });
-      if (!response.ok) throw new Error("DuckDuckGo returned HTTP " + response.status);
-      const html = await response.text();
-      const blocks = html.matchAll(/<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi);
-      for (const match of blocks) {
-        const following = html.slice(match.index + match[0].length, match.index + match[0].length + 1800);
-        const snippetMatch = following.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/(?:a|div)>/i);
-        addResult(match[2], match[1], snippetMatch?.[1]);
-        if (results.length >= 5) break;
-      }
-    } catch (error) {
-      console.warn("DuckDuckGo Search unavailable:", error.message);
     }
-  }
 
-  if (!results.length) {
-    return res.status(502).json({ error: "Live search providers returned no usable results. Try again shortly." });
+    const results = (Array.isArray(payload.results) ? payload.results : [])
+      .map(item => ({
+        title: String(item?.title || "").replace(/\s+/g, " ").trim().slice(0, 180),
+        url: String(item?.url || "").trim().slice(0, 500),
+        snippet: String(item?.content || item?.snippet || "").replace(/\s+/g, " ").trim().slice(0, 900)
+      }))
+      .filter(item => item.title && /^https?:\/\//i.test(item.url))
+      .filter((item, index, all) => all.findIndex(other => other.url === item.url) === index)
+      .slice(0, 5);
+
+    if (!results.length) {
+      return res.status(502).json({ error: "Tavily returned no usable search results. Try a different query." });
+    }
+
+    webSearchCache.set(cacheKey, { results, expiresAt: Date.now() + 120000 });
+    if (webSearchCache.size > 100) {
+      const oldestKey = webSearchCache.keys().next().value;
+      webSearchCache.delete(oldestKey);
+    }
+
+    return res.json({ query, provider: "Tavily", results });
+  } catch (error) {
+    console.error("Tavily Search unavailable:", error.message);
+    return res.status(502).json({ error: "Tavily search is temporarily unavailable. Try again shortly." });
   }
-  res.json({ query, provider: "Google/DuckDuckGo", results });
 });
 
 const imageDailyUsage = new Map();
