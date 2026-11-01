@@ -8,8 +8,7 @@ app.set("trust proxy", 1);
 const PORT = Number(process.env.PORT) || 3000;
 const API_KEY = process.env.GROQ_API_KEY;
 const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const FALLBACK_MODEL = process.env.GROQ_FALLBACK_MODEL || (MODEL === "openai/gpt-oss-20b" ? "openai/gpt-oss-120b" : "openai/gpt-oss-20b");
 
 const GITHUB_APP_ID = process.env.GITHUB_APP_ID;
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
@@ -170,9 +169,9 @@ app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     model: MODEL,
-    configured: Boolean(API_KEY || GEMINI_API_KEY),
-    primaryConfigured: Boolean(API_KEY),
-    fallbackConfigured: Boolean(GEMINI_API_KEY),
+    configured: Boolean(API_KEY),
+    primaryModel: MODEL,
+    fallbackModel: FALLBACK_MODEL,
     githubConfigured: githubReady(),
     githubOAuthConfigured: Boolean(GITHUB_CLIENT_SECRET)
   });
@@ -1117,8 +1116,8 @@ app.post("/api/images/generate", async (req, res) => {
 });
 
 app.post("/api/chat", async (req, res) => {
-  if (!API_KEY && !GEMINI_API_KEY) {
-    return res.status(503).json({ error: "Configure GROQ_API_KEY or GEMINI_API_KEY in the server environment." });
+  if (!API_KEY) {
+    return res.status(503).json({ error: "The server owner needs to configure GROQ_API_KEY." });
   }
 
   const incoming = Array.isArray(req.body?.messages) ? limitConversationMessages(req.body.messages.slice(-8), 3000, 1200) : req.body?.messages;
@@ -1419,116 +1418,80 @@ app.post("/api/chat", async (req, res) => {
     }
   }
 
-  const requestGemini = async () => {
-    if (!GEMINI_API_KEY) return null;
-    const contents = allowed.map(item => ({
-      role: item.role === "assistant" ? "model" : "user",
-      parts: [{ text: item.content }]
-    }));
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/" +
-      encodeURIComponent(GEMINI_MODEL) + ":generateContent?key=" + encodeURIComponent(GEMINI_API_KEY),
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemContent }] },
-          contents,
-          generationConfig: { temperature: 0.6, maxOutputTokens: 4096 }
-        }),
-        signal: AbortSignal.timeout(60000)
-      }
-    );
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const detail = String(data?.error?.message || "Unknown Gemini error").slice(0, 240);
-      throw new Error("Gemini fallback failed (" + response.status + "): " + detail);
-    }
-    const reply = (data?.candidates?.[0]?.content?.parts || [])
-      .map(part => typeof part.text === "string" ? part.text : "")
-      .join("");
-    if (!reply.trim()) throw new Error("Gemini returned no message.");
-    return reply;
-  };
-
-  try {
-    if (!API_KEY) {
-      const reply = await requestGemini();
-      if (!reply) return res.status(503).json({ error: "No AI provider is configured." });
-      return res.json({ reply, provider: "Gemini fallback" });
-    }
-
-    const upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  const callGroqModel = async model => {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": "Bearer " + API_KEY,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: MODEL,
+        model,
         messages: [{ role: "system", content: systemContent }, ...allowed],
         temperature: 0.6,
         max_completion_tokens: 4096
       }),
       signal: AbortSignal.timeout(60000)
     });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(String(data?.error?.message || "Groq HTTP " + response.status).slice(0, 300));
+      error.status = response.status;
+      error.retryAfter = response.headers.get("retry-after");
+      error.resetRequests = response.headers.get("x-ratelimit-reset-requests");
+      error.resetTokens = response.headers.get("x-ratelimit-reset-tokens");
+      throw error;
+    }
+    const reply = data?.choices?.[0]?.message?.content;
+    if (typeof reply !== "string" || !reply.trim()) throw new Error("Groq returned no message.");
+    return reply;
+  };
 
-    const result = await upstream.json().catch(() => ({}));
-    if (!upstream.ok) {
-      const providerMessage = String(result?.error?.message || "Unknown provider error").slice(0, 300);
-      console.error("Groq API error:", upstream.status, providerMessage);
+  try {
+    try {
+      const reply = await callGroqModel(MODEL);
+      return res.json({ reply, provider: "Groq", model: MODEL });
+    } catch (primaryError) {
+      const shouldFallback = primaryError.status === 429 || primaryError.status >= 500 || !primaryError.status;
+      if (!shouldFallback || FALLBACK_MODEL === MODEL) throw primaryError;
 
-      if ((upstream.status === 429 || upstream.status >= 500) && GEMINI_API_KEY) {
-        try {
-          const reply = await requestGemini();
-          return res.json({ reply, provider: "Gemini fallback", fallbackReason: "Groq HTTP " + upstream.status });
-        } catch (fallbackError) {
-          console.error("Gemini fallback error:", fallbackError.message);
-          return res.status(502).json({
-            error: "Groq is unavailable and Gemini fallback failed. Check both providers' limits and configuration.",
-            code: "AI_PROVIDERS_UNAVAILABLE"
+      console.warn("Primary Groq model unavailable; trying fallback:", MODEL, "->", FALLBACK_MODEL, primaryError.message);
+      try {
+        const reply = await callGroqModel(FALLBACK_MODEL);
+        return res.json({
+          reply,
+          provider: "Groq fallback",
+          model: FALLBACK_MODEL,
+          fallbackReason: "Primary model " + MODEL + " was unavailable."
+        });
+      } catch (fallbackError) {
+        console.error("Groq fallback failed:", fallbackError.status || "network", fallbackError.message);
+        if (primaryError.status === 429) {
+          const retryAfter = primaryError.retryAfter;
+          const requestReset = primaryError.resetRequests;
+          const tokenReset = primaryError.resetTokens;
+          const resetHint = retryAfter
+            ? " Retry after " + retryAfter + "."
+            : (requestReset || tokenReset)
+              ? " Reset information — requests: " + (requestReset || "not supplied") + "; tokens: " + (tokenReset || "not supplied") + "."
+              : " Wait briefly, then retry; if it continues, check your Groq usage limits.";
+          return res.status(429).json({
+            error: "Both Groq models are unavailable. The primary model is rate-limited." + resetHint,
+            code: "GROQ_RATE_LIMIT",
+            retryAfter: retryAfter || null,
+            resetRequests: requestReset || null,
+            resetTokens: tokenReset || null
           });
         }
-      }
-
-      if (upstream.status === 429) {
-        const retryAfter = upstream.headers.get("retry-after");
-        const requestReset = upstream.headers.get("x-ratelimit-reset-requests");
-        const tokenReset = upstream.headers.get("x-ratelimit-reset-tokens");
-        const resetHint = retryAfter
-          ? " Retry after " + retryAfter + "."
-          : (requestReset || tokenReset)
-            ? " Reset information — requests: " + (requestReset || "not supplied") + "; tokens: " + (tokenReset || "not supplied") + "."
-            : " Wait briefly, then retry; if it continues, check your Groq usage limits.";
-        return res.status(429).json({
-          error: "Groq is rate-limiting this request." + resetHint,
-          code: "GROQ_RATE_LIMIT",
-          retryAfter: retryAfter || null,
-          resetRequests: requestReset || null,
-          resetTokens: tokenReset || null
+        return res.status(502).json({
+          error: "Both the primary and fallback AI models are unavailable. Try again shortly.",
+          code: "AI_MODELS_UNAVAILABLE"
         });
       }
-      return res.status(502).json({
-        error: "The AI provider returned an error. Check the model and API configuration."
-      });
     }
-
-    const reply = result?.choices?.[0]?.message?.content;
-    if (typeof reply !== "string" || !reply.trim()) {
-      return res.status(502).json({ error: "The AI provider returned no message." });
-    }
-    res.json({ reply, provider: "Groq" });
   } catch (error) {
     console.error("Chat request failed:", error.message);
-    if (GEMINI_API_KEY) {
-      try {
-        const reply = await requestGemini();
-        return res.json({ reply, provider: "Gemini fallback", fallbackReason: "Groq connection failed" });
-      } catch (fallbackError) {
-        console.error("Gemini fallback error:", fallbackError.message);
-      }
-    }
-    res.status(502).json({ error: "Couldn't reach the AI providers. Try again shortly." });
+    res.status(502).json({ error: "Couldn't reach the AI provider. Try again shortly." });
   }
 });
 
