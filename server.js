@@ -1789,7 +1789,7 @@ Score 0-100 based on correctness, relevance, completeness, reasoning, and clarit
         model,
         messages: [
           { role: "system", content: evaluatorPrompt },
-          { role: "user", content: "USER REQUEST:\\n" + String(latestUserMessage).slice(0, 10000) + "\n\nAI DRAFT:\\n" + String(draft).slice(0, 14000) }
+          { role: "user", content: "USER REQUEST:\n" + String(latestUserMessage).slice(0, 10000) + "\n\nAI DRAFT:\n" + String(draft).slice(0, 14000) }
         ],
         temperature: 0.1,
         max_completion_tokens: 900,
