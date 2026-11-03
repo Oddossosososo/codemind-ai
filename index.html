@@ -27,6 +27,7 @@
       <button class="side-link" id="newsButton" data-workspace-tab="news"><span class="side-icon">▤</span> News <span class="news-new">NEW</span></button>
       <button class="side-link" id="memoryButton" data-workspace-tab="memory"><span class="side-icon">⌁</span> Project memory <span class="soon">LOCAL</span></button>
       <button class="side-link" id="testLabButton" data-workspace-tab="testlab"><span class="side-icon">▶</span> Test lab <span class="soon">SAFE</span></button>
+      <button class="side-link" id="scorerButton" data-workspace-tab="scorer"><span class="side-icon">◎</span> Scorer</button>
       <button class="side-link" id="preferencesButton" data-workspace-tab="preferences"><span class="side-icon">⚙</span> Preferences</button>
       <button class="side-link" id="guestInboxButton"><span class="side-icon">◉</span> Live chat</button>
       <div class="side-bottom">
@@ -101,6 +102,22 @@
         <div class="tool-card testlab-card"><div class="testlab-toolbar"><span class="tool-kicker">JAVASCRIPT SANDBOX</span><span class="sandbox-pill">NO DOM · COMMON NETWORK APIS BLOCKED · 3.5S LIMIT</span></div><textarea id="testLabCode" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Test lab JavaScript code">const numbers = [4, 8, 15, 16, 23, 42];
 console.log("Numbers:", numbers);
 console.log("Total:", numbers.reduce((sum, number) => sum + number, 0));</textarea><div class="tool-actions"><button id="runTestLab" class="primary-tool-button" type="button">▶ Run code</button><button id="clearTestLab" type="button">Clear output</button></div><div class="testlab-output-head"><strong>Console output</strong><span id="testLabStatus">Ready</span></div><pre class="testlab-output" id="testLabOutput" aria-live="polite">Your output will appear here.</pre></div>
+      </section>
+      <section class="tool-view scorer-view" id="scorerView" hidden>
+        <div class="tool-heading"><div class="eyebrow"><span></span> CODEMIND EVALUATION ENGINE</div><h1>Work <em>scorer.</em></h1><p>Score code, Geometry Dash projects, and general writing with a consistent 100-point rubric.</p></div>
+        <form class="tool-card scorer-card" id="scorerForm">
+          <label for="scorerCategory">What are you scoring?</label>
+          <select id="scorerCategory"><option value="auto">Auto-detect</option><option value="coding">Code / programming</option><option value="geometry_dash">Geometry Dash</option><option value="general">General writing / other</option></select>
+          <label for="scorerSubmission">Your submission</label>
+          <textarea id="scorerSubmission" maxlength="24000" rows="12" placeholder="Paste your code, level design, essay, or project description…" required></textarea>
+          <label for="scorerReference">Reference material (optional)</label>
+          <textarea id="scorerReference" maxlength="20000" rows="4" placeholder="Paste expected behaviour, source notes, assignment requirements, or a reference knowledge base…"></textarea>
+          <label for="scorerRubric">Custom rubric (optional)</label>
+          <textarea id="scorerRubric" maxlength="5000" rows="3" placeholder="Add your own marking criteria…"></textarea>
+          <div class="scorer-footer"><span>JSON-backed evaluation · no code execution</span><button class="primary-tool-button" id="scorerSubmit" type="submit">◎ Score submission</button></div>
+          <p class="scorer-status" id="scorerStatus" aria-live="polite">Ready to evaluate.</p>
+          <div class="scorer-result" id="scorerResult" hidden></div>
+        </form>
       </section>
       <section class="news-view" id="newsView" hidden>
         <div class="news-heading">
