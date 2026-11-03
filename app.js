@@ -558,7 +558,7 @@ async function sendMessage(text) {
     }
     if (data.aiScore && Number.isFinite(data.aiScore.score)) {
       const label = data.aiScore.revised ? " · improved after review" : " · self-checked";
-      data.reply += "\\n\\n> **CodeMind quality check:** " + Math.round(data.aiScore.score) + "/100" + label;
+      data.reply += "\n\n> **CodeMind draft score:** " + Math.round(data.aiScore.score) + "/100" + label;
     }
     if (typeof data.reply !== "string" || !data.reply.trim()) throw new Error("The model returned an empty response.");
     messages.push({ role: "assistant", content: data.reply.trim() }); saveMessages();
