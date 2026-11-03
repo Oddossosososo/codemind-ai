@@ -14,8 +14,16 @@ const sendButton = document.querySelector("#sendButton");
 const imageButton = document.querySelector("#imageButton");
 const toast = document.querySelector("#toast");
 const STORAGE_KEY = "codemind-chat-v1";
+const CHATS_KEY = "codemind-chats-v1";
+const CURRENT_CHAT_KEY = "codemind-current-chat-v1";
 const API_BASE_URL = "https://codemind-ai-l8ix.onrender.com";
+let currentChatId = localStorage.getItem(CURRENT_CHAT_KEY) || "chat-" + Date.now().toString(36);
+let chats = loadChats();
 let messages = loadMessages();
+if (!chats.some(chat => chat.id === currentChatId)) {
+  chats.unshift({ id: currentChatId, title: "New conversation", messages });
+  saveChats();
+}
 // Restore the repository from the conversation if an older chat predates repo persistence.
 if (!activeGithubRepo) {
   const previousRepoMessage = [...messages].reverse().find(item =>
@@ -50,15 +58,38 @@ if (agentModeButton) {
   });
 }
 
-function loadMessages() {
+function loadChats() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    return Array.isArray(saved) ? saved.slice(-40) : [];
+    const saved = JSON.parse(localStorage.getItem(CHATS_KEY) || "[]");
+    return Array.isArray(saved) ? saved.filter(chat => chat && typeof chat.id === "string").slice(-50) : [];
   } catch { return []; }
 }
+function loadMessages() {
+  const active = chats.find(chat => chat.id === currentChatId);
+  if (active && Array.isArray(active.messages)) return active.messages.slice(-100);
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    return Array.isArray(saved) ? saved.slice(-100) : [];
+  } catch { return []; }
+}
+function saveChats() {
+  try { localStorage.setItem(CHATS_KEY, JSON.stringify(chats.slice(-50))); }
+  catch { showToast("Couldn't save chat memory in this browser."); }
+}
 function saveMessages() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-40))); }
-  catch { showToast("Couldn't save chat history in this browser."); }
+  try {
+    messages = messages.slice(-100);
+    const active = chats.find(chat => chat.id === currentChatId);
+    const firstUser = messages.find(item => item.role === "user");
+    const title = active?.title && active.title !== "New conversation"
+      ? active.title
+      : (firstUser ? String(firstUser.content).replace(/\s+/g, " ").slice(0, 48) : "New conversation");
+    const chat = { id: currentChatId, title, updatedAt: Date.now(), messages };
+    chats = [chat, ...chats.filter(item => item.id !== currentChatId)].slice(0, 50);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    localStorage.setItem(CURRENT_CHAT_KEY, currentChatId);
+    saveChats();
+  } catch { showToast("Couldn't save chat history in this browser."); }
 }
 function showToast(message) {
   toast.textContent = message;
@@ -619,6 +650,8 @@ document.querySelectorAll(".suggestion").forEach(button => {
   button.addEventListener("click", () => sendMessage(button.dataset.prompt || ""));
 });
 document.querySelector("#newChat").addEventListener("click", () => {
+  currentChatId = "chat-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
+  localStorage.setItem(CURRENT_CHAT_KEY, currentChatId);
   messages = [];
   activeGithubFile = null;
   saveMessages();
