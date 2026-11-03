@@ -556,6 +556,10 @@ async function sendMessage(text) {
         data.reply += "\n\nI couldn't prepare the GitHub change proposal: " + editError.message + ". The analysis above is still available.";
       }
     }
+    if (data.aiScore && Number.isFinite(data.aiScore.score)) {
+      const label = data.aiScore.revised ? " · improved after review" : " · self-checked";
+      data.reply += "\\n\\n> **CodeMind quality check:** " + Math.round(data.aiScore.score) + "/100" + label;
+    }
     if (typeof data.reply !== "string" || !data.reply.trim()) throw new Error("The model returned an empty response.");
     messages.push({ role: "assistant", content: data.reply.trim() }); saveMessages();
     if (useEditWorkflow && data.edits?.length) chatEditResult = data.edits;
