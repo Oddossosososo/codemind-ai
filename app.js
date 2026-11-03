@@ -995,7 +995,7 @@ document.querySelector("#clearTestLab").addEventListener("click", () => {
 });
 
 function showWorkspaceTab(tab) {
-  const views = { editor: "#editorView", github: "#githubView", search: "#searchView", memory: "#memoryView", testlab: "#testLabView", news: "#newsView", preferences: "#preferencesView" };
+  const views = { editor: "#editorView", github: "#githubView", search: "#searchView", memory: "#memoryView", testlab: "#testLabView", scorer: "#scorerView", news: "#newsView", preferences: "#preferencesView" };
   Object.entries(views).forEach(([key, selector]) => {
     const view = document.querySelector(selector);
     if (view) view.hidden = key !== tab;
@@ -1004,7 +1004,7 @@ function showWorkspaceTab(tab) {
   chatArea.hidden = !isChat;
   composerWrap.hidden = !isChat;
   document.querySelectorAll("[data-workspace-tab]").forEach(button => button.classList.toggle("active", button.dataset.workspaceTab === tab));
-  const labels = { chat: "New conversation", editor: "Code editor", github: "GitHub", search: "Smart search", memory: "Project memory", testlab: "Test lab", news: "News", preferences: "Preferences" };
+  const labels = { chat: "New conversation", editor: "Code editor", github: "GitHub", search: "Smart search", memory: "Project memory", testlab: "Test lab", scorer: "Work scorer", news: "News", preferences: "Preferences" };
   document.querySelector(".breadcrumb strong").textContent = labels[tab] || "Workspace";
   document.querySelector("#sidebar").classList.remove("open");
   if (tab === "memory") renderProjectMemory();
@@ -1456,5 +1456,50 @@ renderProjectMemory();
   });
   window.addEventListener("pagehide", () => {
     if (listening) recognition.abort();
+  });
+})();
+
+
+// CodeMind Scorer — structured JSON evaluation for code, Geometry Dash, and general work.
+(() => {
+  const scorerForm = document.querySelector("#scorerForm");
+  if (!scorerForm) return;
+  const status = document.querySelector("#scorerStatus");
+  const result = document.querySelector("#scorerResult");
+  const submit = document.querySelector("#scorerSubmit");
+  scorerForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    const submission = document.querySelector("#scorerSubmission").value.trim();
+    if (!submission) return;
+    submit.disabled = true;
+    submit.textContent = "Scoring…";
+    status.textContent = "Evaluating against the selected rubric…";
+    result.hidden = true;
+    result.textContent = "";
+    try {
+      const response = await fetch(API_BASE_URL + "/api/essay-score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: document.querySelector("#scorerCategory").value,
+          submission,
+          reference: document.querySelector("#scorerReference").value,
+          rubric: document.querySelector("#scorerRubric").value
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Scoring request failed.");
+      const evaluation = data.evaluation;
+      if (!evaluation || !evaluation.scores) throw new Error("The scorer returned an incomplete result.");
+      result.textContent = JSON.stringify(evaluation, null, 2);
+      result.hidden = false;
+      status.textContent = "Evaluation complete · " + evaluation.scores.total + "/100" +
+        (evaluation.is_provisional ? " · provisional" : "");
+    } catch (error) {
+      status.textContent = error.message || "Could not score this submission.";
+    } finally {
+      submit.disabled = false;
+      submit.textContent = "◎ Score submission";
+    }
   });
 })();
