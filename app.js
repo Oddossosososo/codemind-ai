@@ -1018,6 +1018,7 @@ document.querySelector("#githubButton").addEventListener("click", () => showWork
 document.querySelector("#searchButton").addEventListener("click", () => showWorkspaceTab("search"));
 document.querySelector("#memoryButton").addEventListener("click", () => showWorkspaceTab("memory"));
 document.querySelector("#testLabButton").addEventListener("click", () => showWorkspaceTab("testlab"));
+document.querySelector("#scorerButton").addEventListener("click", () => showWorkspaceTab("scorer"));
 document.querySelector("#mobileMenu").addEventListener("click", () => document.querySelector("#sidebar").classList.toggle("open"));
 document.addEventListener("keydown", event => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
