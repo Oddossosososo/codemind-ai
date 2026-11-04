@@ -102,11 +102,28 @@ function escapeHTML(value) {
 }
 // Small safe formatter: escapes all text before adding basic code formatting.
 function formatText(value) {
-  let safe = escapeHTML(value);
-  safe = safe.replace(/```([\w-]*)\n([\s\S]*?)```/g, (_, lang, code) =>
-    '<pre><code>' + code.trim() + '</code></pre>');
-  safe = safe.replace(/`([^`\n]+)`/g, '<code>$1</code>');
-  return safe;
+  // Escape first, then apply a small safe Markdown renderer (no raw HTML).
+  let safe = escapeHTML(String(value ?? ""));
+  const codeBlocks = [];
+  safe = safe.replace(/```([\\w-]*)\\n([\\s\\S]*?)```/g, (_, lang, code) => {
+    const index = codeBlocks.push('<pre><code' + (lang ? ' class="language-' + lang + '"' : '') + '>' + code.replace(/\\n$/, "") + '</code></pre>') - 1;
+    return "@@CODEBLOCK" + index + "@@";
+  });
+  safe = safe.replace(/`([^`\\n]+)`/g, '<code>$1</code>');
+  safe = safe.replace(/^###### (.+)$/gm, '<h6>$1</h6>')
+    .replace(/^##### (.+)$/gm, '<h5>$1</h5>')
+    .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>')
+    .replace(/\\*(.+?)\\*/g, '<em>$1</em>');
+  safe = safe.split(/\\n\\n+/).map(block => {
+    if (/^@@CODEBLOCK\\d+@@$/.test(block)) return block;
+    if (/^<(h[1-6]|pre|ul|ol|blockquote)/.test(block)) return block;
+    return '<p>' + block.replace(/\\n/g, '<br>') + '</p>';
+  }).join("");
+  return safe.replace(/@@CODEBLOCK(\\d+)@@/g, (_, index) => codeBlocks[Number(index)] || "");
 }
 function linkifyMessageText(container) {
   if (!container) return;
