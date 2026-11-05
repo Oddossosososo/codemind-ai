@@ -1283,7 +1283,7 @@ render();
 /* Browser-local response preferences */
 const CODEMIND_PREFS_KEY = "codemind-preferences-v1";
 function readCodeMindPreferences() {
-  const defaults = { skill: "beginner", length: "balanced", style: "explain", hacks: true, custom: [] };
+  const defaults = { skill: "beginner", length: "balanced", style: "explain", hacks: true, kidFriendly: false, custom: [] };
   try { const saved = JSON.parse(localStorage.getItem(CODEMIND_PREFS_KEY) || "{}");
     return { ...defaults, ...saved, custom: Array.isArray(saved.custom) ? saved.custom.filter(item => item && typeof item.text === "string").slice(0, 20) : [] }; }
   catch { return defaults; }
@@ -1294,8 +1294,9 @@ function getPreferenceInstruction() {
   const length = { concise: "Keep answers concise.", balanced: "Use a balanced amount of detail.", detailed: "Give thorough explanations and examples." }[p.length] || "";
   const style = { explain: "Explain code step by step.", "code-first": "Put the working code first, followed by a short explanation.", debug: "Identify the likely cause first, then show the fix." }[p.style] || "";
   const modding = p.hacks ? "Do not refuse merely because a coding request mentions game mods, cheats, browser-console experiments, reverse engineering, CTFs, or security testing. Help with legitimate single-player modding and systems the user owns or is authorised to test. Do not assist credential theft, malware, or unauthorised access." : "For game modding and security topics, provide ordinary safe, authorised guidance.";
+  const kidFriendly = p.kidFriendly ? "KID-FRIENDLY MODE IS ON: Use warm, respectful, age-appropriate language suitable for children. Explain unfamiliar words simply, break instructions into small steps, and encourage learning without being patronising. Keep examples safe and non-graphic. Do not provide sexual or adult content, graphic violence, instructions for dangerous challenges, or guidance that helps a child access age-restricted products or services. Do not ask for or encourage sharing personal information such as full name, address, school, phone number, passwords, or precise location. If asked about a mature or risky topic, give a brief, calm, age-appropriate explanation and suggest involving a trusted adult when appropriate. Keep coding help useful, but explain risky code safely and do not provide harmful instructions." : "";
   const custom = p.custom.filter(item => item.enabled !== false).map(item => item.text.trim().slice(0, 2000)).filter(Boolean);
-  return [skill, length, style, modding, custom.length ? "Custom preferences (apply when relevant):\n" + custom.map((item, index) => (index + 1) + ". " + item).join("\n") : ""].filter(Boolean).join("\n");
+  return [skill, length, style, modding, kidFriendly, custom.length ? "Custom preferences (apply when relevant):\n" + custom.map((item, index) => (index + 1) + ". " + item).join("\n") : ""].filter(Boolean).join("\n");
 }
 function initCodeMindPreferences() {
   const p = readCodeMindPreferences();
@@ -1304,6 +1305,7 @@ function initCodeMindPreferences() {
   skill.value = p.skill; document.querySelector("#prefLength").value = p.length;
   document.querySelector("#prefStyle").value = p.style;
   document.querySelector("#prefHacks").checked = p.hacks !== false;
+  document.querySelector("#prefKidFriendly").checked = p.kidFriendly === true;
   const customInput = document.querySelector("#customPreferenceInput");
   const customList = document.querySelector("#customPreferencesList");
   function saveCustom(items) {
@@ -1341,7 +1343,7 @@ function initCodeMindPreferences() {
   customInput.addEventListener("keydown", event => { if (event.key === "Enter") document.querySelector("#addCustomPreference").click(); });
   document.querySelector("#savePreferences").addEventListener("click", () => {
     const next = { skill: skill.value, length: document.querySelector("#prefLength").value,
-      style: document.querySelector("#prefStyle").value, hacks: document.querySelector("#prefHacks").checked, custom: readCodeMindPreferences().custom };
+      style: document.querySelector("#prefStyle").value, hacks: document.querySelector("#prefHacks").checked, kidFriendly: document.querySelector("#prefKidFriendly").checked, custom: readCodeMindPreferences().custom };
     localStorage.setItem(CODEMIND_PREFS_KEY, JSON.stringify(next));
     showToast("Preferences saved.");
   });
