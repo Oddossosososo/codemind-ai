@@ -116,7 +116,7 @@ function formatText(value) {
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
     .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    .replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>')
+    .replace(/\\*\\*(.+?)\\*\\*/g, '$1')
     .replace(/\\*(.+?)\\*/g, '<em>$1</em>');
   safe = safe.split(/\\n\\n+/).map(block => {
     if (/^@@CODEBLOCK\\d+@@$/.test(block)) return block;
@@ -1260,7 +1260,7 @@ render();
           <div><div class="live-room-kicker">OPEN COMMUNITY</div><h2 id="liveRoomTitle">Live conversations</h2><span id="liveRoomCount">Connecting…</span></div>
           <button type="button" class="live-room-close" aria-label="Close live chat">×</button>
         </header>
-        <p class="live-room-notice">Public room: everyone who joins, including <strong>myfoodishere</strong>, can read and reply to every message. Don't share private information.</p>
+        <p class="live-room-notice">Public room: everyone who joins, including myfoodishere, can read and reply to every message. Don't share private information.</p>
         <div class="live-room-messages" id="liveRoomMessages" aria-live="polite"></div>
         <form class="live-room-composer" id="liveRoomForm">
           <input id="liveRoomInput" maxlength="700" autocomplete="off" placeholder="Message everyone…" aria-label="Live chat message">
