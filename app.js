@@ -177,6 +177,7 @@ function render() {
         <div class="message-role">${message.role === "user" ? "YOU" : "CODEMIND AI"}</div>
         <div class="message-text">${formatText(message.content || "")}</div>
         ${message.imageUrl ? '<a class="message-image-link" href="' + escapeHTML(message.imageUrl) + '" target="_blank" rel="noopener noreferrer"><img class="message-image" src="' + escapeHTML(message.imageUrl) + '" alt="AI-generated image" loading="lazy"></a>' : ""}
+        ${Array.isArray(message.sources) && message.sources.length ? '<section class="message-sources"><strong>Sources</strong><ol>' + message.sources.map(source => '<li><a href="' + escapeHTML(source.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHTML(source.title || source.url) + '</a><span>' + escapeHTML(new URL(source.url).hostname) + '</span></li>').join("") + '</ol></section>' : ""}
       </div>
     </article>`).join("");
   linkifyMessageText(messagesEl);
@@ -575,7 +576,8 @@ async function sendMessage(text) {
     }
     // AI self-evaluation runs automatically in the backend; keep its score internal.
     if (typeof data.reply !== "string" || !data.reply.trim()) throw new Error("The model returned an empty response.");
-    messages.push({ role: "assistant", content: data.reply.trim() }); saveMessages();
+    const attachedSources = (Array.isArray(data.sources) ? data.sources : webResults).slice(0, 8).map(source => ({ title: String(source.title || source.url || "Source").slice(0, 180), url: String(source.url || "") })).filter(source => { try { const url = new URL(source.url); return url.protocol === "https:" || url.protocol === "http:"; } catch { return false; } });
+    messages.push({ role: "assistant", content: data.reply.trim(), ...(attachedSources.length ? { sources: attachedSources } : {}) }); saveMessages();
     if (useEditWorkflow && data.edits?.length) chatEditResult = data.edits;
     if (useAgentMode) window.lastAgentRun = data;
   } catch (error) {
